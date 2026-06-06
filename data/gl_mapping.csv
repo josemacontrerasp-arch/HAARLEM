@@ -1,0 +1,12 @@
+mapping_rule_id,source_system,gl_account_native,gl_account_native_description,gl_account_unified,gl_account_unified_description,driver_type,notes
+GILDE-8000,gilde,8000,Omzet hoog (21% BTW),8000,Revenue - standard rate,milestone_billing,High-rate VAT revenue; invoiced project milestones
+GILDE-8001,gilde,8001,Omzet verlegd (reverse charge),8001,Revenue - reverse charge,milestone_billing,Reverse-charge construction revenue (BTW verlegd)
+GILDE-8002,gilde,8002,Omzet overig,8002,Revenue - other,milestone_billing,Low-volume other revenue line
+YUKI-8002,yuki,8002,Omzet belast 9%,8002,Revenue - reduced rate,milestone_billing,9% VAT rate revenue (reduced rate services)
+YUKI-8004,yuki,8004,Omzet belast met 0% of niet bij u belast,8004,Revenue - zero/exempt,milestone_billing,Zero-rated or exempt revenue
+YUKI-8005,yuki,8005,Omzet waarbij de heffing naar u is verlegd,8001,Revenue - reverse charge,milestone_billing,Reverse-charge revenue; maps to unified 8001
+DS2-VERKOOP,snelstart,006 - Verkoop,Verkoopboek (sales journal),8000,Revenue - standard rate,milestone_billing,Sales journal entries; BTW-bedrag column present
+DS2-MMEM-WIP,snelstart,008 - MMEM,Memoriaal (memorial/adjustment journal),8001,Revenue - reverse charge,milestone_billing,Credit-side MMEM mid-period: WIP reversal / milestone billing not yet invoiced -> status=wip; adapter condition: is_credit=True AND day_of_month != 31
+DS2-MMEM-ACCRUAL,snelstart,008 - MMEM,Memoriaal (memorial/adjustment journal),9000,Year-end accrual reversal,other,Debit-side MMEM at year-end (Dec 31 or same batch as Dec 31): accrual correction -> status=actual; adapter condition: is_credit=False OR (month=12 AND day=31)
+DS2-KAS,snelstart,001 - Kas,Kasboek (cash journal),1100,Cash / bank,customer_payment,Cash receipts and payments
+DS2-GILDE,snelstart,60 - Verkoopboek Gilde,Verkoopboek Gilde (Gilde sales journal),8001,Revenue - reverse charge,milestone_billing,Gilde-routed reverse-charge sales booked in Snelstart
