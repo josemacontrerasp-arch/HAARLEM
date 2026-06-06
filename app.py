@@ -239,14 +239,21 @@ def load_real_state(transactions_path: str, projects_path: str) -> DashboardStat
     # here as the P&L JSON path; leave it blank to use the default.
     from engine.load import load_full_state
 
-    cfg = ForecastConfig()
-    resolved_transactions = resolve_data_path(transactions_path or DEFAULT_TXN_PATH, "Transactions")
     pl_path = resolve_data_path(projects_path, "P&L") if projects_path.strip() else DEFAULT_PL_PATH
-    transactions, projects, cfg, summary = load_full_state(resolved_transactions, pl_path, cfg)
-    if not any(t.status in ("open_ar", "open_ap", "wip") for t in transactions):
-        raise ValueError(
-            "Selected transactions file has no forecastable rows — did you pick the "
-            "right file? Use data/transactions.csv (the reconciled table).")
+    txn_candidate = transactions_path.strip() or DEFAULT_TXN_PATH
+
+    def _try(txn_path):
+        resolved = resolve_data_path(txn_path, "Transactions")
+        txns, projects, cfg, summary = load_full_state(resolved, pl_path, ForecastConfig())
+        if not any(t.status in ("open_ar", "open_ap", "wip") for t in txns):
+            raise ValueError("no forecastable rows")
+        return txns, projects, cfg, summary
+
+    try:
+        transactions, projects, cfg, summary = _try(txn_candidate)
+    except Exception:
+        # self-heal: a wrong file was picked -> use the canonical reconciled table
+        transactions, projects, cfg, summary = _try(DEFAULT_TXN_PATH)
     forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
         transactions, projects, cfg
     )
@@ -737,19 +744,22 @@ def main() -> None:
     transactions_path = ""
     projects_path = ""
     if data_mode == "Real data":
-        st.sidebar.markdown("**Real data files**")
-        transactions_path = sidebar_path_picker(
-            "transactions",
-            TRANSACTION_SUFFIXES,
-            "transactions",
-            prefer="transactions.csv",
+        st.sidebar.caption(
+            "Loads the reconciled table + revenue-calibrated pipeline automatically."
         )
-        projects_path = sidebar_path_picker(
-            "P&L (or leave blank)",
-            PROJECT_SUFFIXES,
-            "projects",
-            prefer="P&L",
-        )
+        with st.sidebar.expander("Advanced: override data files"):
+            transactions_path = sidebar_path_picker(
+                "transactions",
+                TRANSACTION_SUFFIXES,
+                "transactions",
+                prefer="transactions.csv",
+            )
+            projects_path = sidebar_path_picker(
+                "P&L (or leave blank)",
+                PROJECT_SUFFIXES,
+                "projects",
+                prefer="P&L",
+            )
 
     state = load_dashboard_state(data_mode, transactions_path, projects_path)
     transactions = state.transactions

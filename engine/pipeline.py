@@ -72,7 +72,10 @@ def build_pipeline(
         monthly = _monthly_revenue(blk)
         if monthly < min_monthly_revenue:
             continue  # skip opcos with no reliable revenue (e.g. Heeze partial)
-        target = monthly * 3.0   # ~13 weeks of billing
+        # forward book in the 13-week window: billable WIP in flight, as a multiple
+        # of monthly revenue (cfg-tunable). Tuned so base dips to amber and weather
+        # pushes it into the red.
+        target = monthly * cfg.pipeline_revenue_multiple
 
         # split target into N projects with varied weights
         weights = [rng.uniform(0.6, 1.4) for _ in range(projects_per_opco)]
@@ -82,7 +85,9 @@ def build_pipeline(
             pid = f"{opco[:3].upper()}-{i+1:02d}"
             exposure = round(rng.uniform(0.3, 0.9), 2)
             seg = rng.choice(SEGMENTS)
-            mile_week = rng.randint(2, max(2, horizon - 3))
+            # keep milestones early enough that collections (milestone + lag)
+            # land inside the 13-week horizon, not beyond it
+            mile_week = rng.randint(2, min(7, max(2, horizon - 3)))
             mile_date = cfg.anchor_monday + timedelta(weeks=mile_week)
 
             # cost schedule (outflows)

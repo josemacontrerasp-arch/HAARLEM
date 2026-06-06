@@ -198,7 +198,13 @@ def load_full_state(txn_path: str, pl_path: str, cfg=None):
     # operating cash ~= cfg.opening_cash_months of revenue (documented), split per
     # opco by revenue share so per-opco views start from a realistic position.
     _, ttm_rev, per_opco = portfolio_ebitda_assumed(pl_path, cfg.ebitda_assumed_margin)
-    cfg.opening_balance = round(ttm_rev / 12.0 * cfg.opening_cash_months, 2)
+    monthly = ttm_rev / 12.0
+    cfg.opening_balance = round(monthly * cfg.opening_cash_months, 2)
+    # Scale the liquidity covenant to the business: a minimum cash floor of ~0.5
+    # month of revenue, with an amber warning band of the same width. (At 100k the
+    # band is invisible against million-euro swings, so weeks never show amber.)
+    cfg.covenant_threshold = round(monthly * 0.5, 2)
+    cfg.covenant_amber_buffer = round(monthly * 0.5, 2)
     if ttm_rev > 0:
         cfg.opening_balance_by_opco = {
             OPCO_DISPLAY.get(k, k): round(cfg.opening_balance * v / ttm_rev, 2)

@@ -27,7 +27,9 @@ class ForecastConfig:
 
     # No bank/cash export was provided, so opening cash is assumed as this many
     # months of revenue (documented assumption used by load_full_state).
-    opening_cash_months: float = 1.0
+    opening_cash_months: float = 1.75
+    # forward billable WIP in the 13-week window as a multiple of monthly revenue
+    pipeline_revenue_multiple: float = 2.5
 
     # Payment lag in DAYS by customer_segment. open_ar settles at date + lag.
     # GAP: segment isn't in the unified table yet -> resolved via counterparty_map.
@@ -55,7 +57,11 @@ class ForecastConfig:
     # NET DEBT / EBITDA, EBITDA on a TRAILING-12-MONTH basis, TESTED QUARTERLY.
     # -> covenant_metric = "leverage", covenant_test_cadence = "quarterly".
     # STILL MISSING (the numbers): the loan/debt amount and the max multiple.
-    covenant_metric: str = "leverage"        # min_liquidity | leverage | dscr
+    # The weekly dashboard light tracks LIQUIDITY (cash buffer) because that is
+    # what the weather cascade actually moves. The lender's leverage covenant
+    # (Net Debt/EBITDA, TTM, quarterly) is the board-level test and barely reacts
+    # to 13-week cash timing -> shown separately, not as the weekly light.
+    covenant_metric: str = "min_liquidity"   # min_liquidity | leverage | dscr
     covenant_test_cadence: str = "quarterly"  # quarterly | weekly
 
     # min_liquidity: cash must stay >= threshold (EUR)

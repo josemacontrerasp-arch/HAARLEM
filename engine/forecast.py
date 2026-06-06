@@ -152,7 +152,10 @@ def build_forecast(
         # demo lands on (PRD section 10: "materials already paid despite billing slip").
         eff_date = t.date
         assumptions: List[str] = []
-        weather_movable = t.status in ("open_ar", "wip") or t.driver_type == "subcontractor"
+        # Weather delays BILLING/COLLECTIONS (the work that generates revenue).
+        # Committed costs (materials AND scheduled subcontractors) are paid on
+        # schedule regardless -> that gap is the cash squeeze (PRD section 10).
+        weather_movable = t.status in ("open_ar", "wip")
         slip = (weather_shift.get(t.project_id or "", 0)
                 if (t.project_id in weather_exposed and weather_movable) else 0)
         if slip:
@@ -209,7 +212,7 @@ def build_forecast(
                       movable=False, exposed=exposed, weather_shift=weather_shift,
                       scenario=scenario, cfg=cfg)
         _add_schedule(fc, p, p.subcontractor_schedule, "subcontractor",
-                      movable=True, exposed=exposed, weather_shift=weather_shift,
+                      movable=False, exposed=exposed, weather_shift=weather_shift,
                       scenario=scenario, cfg=cfg)
 
     return fc
