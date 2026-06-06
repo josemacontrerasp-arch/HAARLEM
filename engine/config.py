@@ -18,6 +18,10 @@ class ForecastConfig:
     # Lane A's real `actual` rows can replace this; stubbed for now.
     opening_balance: float = 250_000.0
 
+    # If Lane A doesn't emit explicit vat_remittance rows, compute quarterly BTW
+    # from the vat_amount column (engine/vat.py).
+    compute_vat: bool = True
+
     # Payment lag in DAYS by customer_segment. open_ar settles at date + lag.
     # GAP: segment isn't in the unified table yet -> resolved via counterparty_map.
     # These are exactly the coefficients the "legit ML" step can estimate.

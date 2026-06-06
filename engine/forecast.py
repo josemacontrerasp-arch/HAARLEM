@@ -7,16 +7,23 @@ TracedValues, so `trace()` is just a filter over them — drill-down for free.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from typing import Dict, List, Optional
 
+from . import covenant as covenant_rule
 from .config import ForecastConfig
 from .schema import Project, TracedValue, Transaction
+from .vat import compute_vat_remittances
 
 # Weather handoff (Lane C owns producing this): working days lost per project,
 # per scenario. base = no shift. Lane B owns *applying* it.
 WeatherShift = Dict[str, int]   # {project_id: working_days_lost}
+
+_DRIVER_ORDER = [
+    "milestone_billing", "customer_payment", "materials",
+    "subcontractor", "vat_remittance", "other",
+]
 
 
 @dataclass
@@ -24,6 +31,7 @@ class Forecast:
     scenario: str
     weeks: List[date]                                   # Monday of each week
     opening_balance: float
+    cfg: ForecastConfig
     contributions: List[TracedValue] = field(default_factory=list)
 
     # ---- aggregations (all derived from `contributions`) ----
@@ -47,20 +55,12 @@ class Forecast:
             bal.append(run)
         return bal
 
-    def covenant_headroom(self, cfg: ForecastConfig) -> List[float]:
-        # Placeholder rule until the covenant doc lands: headroom = balance - threshold.
-        return [b - cfg.covenant_threshold for b in self.running_balance()]
+    def covenant_headroom(self) -> List[float]:
+        return covenant_rule.headroom_metric(
+            self.running_balance(), self.net_cash(), self.cfg)
 
-    def covenant_lights(self, cfg: ForecastConfig) -> List[str]:
-        lights = []
-        for h in self.covenant_headroom(cfg):
-            if h < 0:
-                lights.append("red")
-            elif h < cfg.covenant_amber_buffer:
-                lights.append("amber")
-            else:
-                lights.append("green")
-        return lights
+    def covenant_lights(self) -> List[str]:
+        return covenant_rule.lights(self.covenant_headroom(), self.cfg)
 
     def trace(self, week: int, driver: Optional[str] = None) -> List[TracedValue]:
         """The drill-down path: every TracedValue behind a cell."""
@@ -69,16 +69,32 @@ class Forecast:
             if c.week == week and (driver is None or c.driver == driver)
         ]
 
-
-_DRIVER_ORDER = [
-    "milestone_billing", "customer_payment", "materials",
-    "subcontractor", "vat_remittance", "other",
-]
+    def to_dict(self) -> dict:
+        """One serialisable object Lane C reads (even across a process / JS boundary).
+        Same object -> no two numbers disagree."""
+        return {
+            "scenario": self.scenario,
+            "weeks": [w.isoformat() for w in self.weeks],
+            "opening_balance": self.opening_balance,
+            "drivers": self.drivers(),
+            "net_cash": self.net_cash(),
+            "running_balance": self.running_balance(),
+            "covenant_headroom": self.covenant_headroom(),
+            "covenant_lights": self.covenant_lights(),
+            "first_breach_week": covenant_rule.first_breach_week(self.covenant_lights()),
+            "contributions": [asdict(c) for c in self.contributions],
+        }
 
 
 def _week_index(d: date, anchor: date, horizon: int) -> Optional[int]:
     w = (d - anchor).days // 7
     return w if 0 <= w < horizon else None
+
+
+def _outflow_driver(driver_type: str) -> str:
+    if driver_type in ("materials", "subcontractor", "vat_remittance"):
+        return driver_type
+    return "other"
 
 
 def build_forecast(
@@ -91,11 +107,18 @@ def build_forecast(
     cfg = cfg or ForecastConfig()
     weather_shift = weather_shift or {}
     weeks = [cfg.anchor_monday + timedelta(weeks=w) for w in range(cfg.horizon_weeks)]
-    fc = Forecast(scenario=scenario, weeks=weeks, opening_balance=cfg.opening_balance)
+    fc = Forecast(scenario=scenario, weeks=weeks,
+                  opening_balance=cfg.opening_balance, cfg=cfg)
+
+    # Compute quarterly BTW remittance from the vat column unless Lane A already
+    # supplied explicit vat_remittance rows.
+    rows = list(transactions)
+    if cfg.compute_vat and not any(t.driver_type == "vat_remittance" for t in rows):
+        rows = rows + compute_vat_remittances(rows)
 
     weather_exposed = {p.project_id for p in projects if p.weather_exposure > 0}
 
-    for t in transactions:
+    for t in rows:
         if t.status == "actual":
             continue  # already in opening_balance; not a forward cash event
 
@@ -115,7 +138,6 @@ def build_forecast(
 
         # --- place the event in a week and sign it -----------------------------
         if t.status == "open_ar":
-            # invoice issued, unpaid -> inflow at invoice_date + payment_lag
             seg = t.counterparty_segment or cfg.segment_for(t.counterparty)
             lag = cfg.lag_for(seg)
             cash_date = eff_date + timedelta(days=lag)
@@ -124,13 +146,11 @@ def build_forecast(
             value = t.amount_incl_vat
             comp = f"open_ar gross {value:,.0f} @ invoice+{lag}d"
         elif t.status == "open_ap":
-            # committed outflow due on its date (materials / subcontractor)
             cash_date = eff_date
-            driver = t.driver_type if t.driver_type in ("materials", "subcontractor") else "other"
+            driver = _outflow_driver(t.driver_type)
             value = t.amount_incl_vat
             comp = f"open_ap {driver} {value:,.0f} due"
         elif t.status == "wip":
-            # work done, not yet invoiced -> bill at date, collect after lag
             seg = t.counterparty_segment or cfg.segment_for(t.counterparty)
             lag = cfg.lag_for(seg)
             cash_date = eff_date + timedelta(days=lag)
@@ -150,8 +170,35 @@ def build_forecast(
             contributing_records=[t.record_id],
             assumptions_applied=assumptions,
             scenario=scenario,
-            toggle_values={"weather_shift": weather_shift},
+            toggle_values={"weather_shift": dict(weather_shift)},
             computation=comp,
         ))
 
     return fc
+
+
+@dataclass
+class Mover:
+    week: int
+    driver: str
+    base_value: float
+    scenario_value: float
+
+    @property
+    def delta(self) -> float:
+        return self.scenario_value - self.base_value
+
+
+def biggest_movers(base: Forecast, scenario: Forecast, top: int = 5) -> List[Mover]:
+    """What changed most between base and a scenario, per (week, driver).
+    Powers the demo: 'click the week-9 dip -> biggest mover is deferred billing'."""
+    bd, sd = base.drivers(), scenario.drivers()
+    movers: List[Mover] = []
+    for driver in set(bd) | set(sd):
+        bv = bd.get(driver, [0.0] * len(base.weeks))
+        sv = sd.get(driver, [0.0] * len(scenario.weeks))
+        for w in range(min(len(bv), len(sv))):
+            if abs(sv[w] - bv[w]) > 0.5:
+                movers.append(Mover(w, driver, bv[w], sv[w]))
+    movers.sort(key=lambda m: abs(m.delta), reverse=True)
+    return movers[:top]
