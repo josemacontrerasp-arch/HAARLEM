@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import streamlit as st
@@ -15,6 +17,8 @@ from engine import (
     covenant,
     make_stub,
 )
+from engine.forecast import build_all_opcos
+from engine.load import load_projects, load_transactions
 
 
 ScenarioConfig = Tuple[str, Dict[str, int], str]
@@ -52,6 +56,23 @@ LIGHT_COLORS = {
     "red": ("#991b1b", "#fee2e2", "#fecaca"),
 }
 
+TRANSACTION_SUFFIXES = {".csv", ".parquet", ".duckdb", ".db", ".sqlite"}
+PROJECT_SUFFIXES = {".json"}
+
+
+@dataclass
+class DashboardState:
+    cfg: ForecastConfig
+    transactions: List[Transaction]
+    projects: List[Project]
+    forecasts: Dict[str, Forecast]
+    opco_forecasts: Dict[str, Dict[str, Forecast]] = field(default_factory=dict)
+    data_label: str = "Demo stub data"
+    data_note: str = ""
+    transaction_summary: Optional[Dict[str, object]] = None
+    build_notes: List[str] = field(default_factory=list)
+    using_stub: bool = True
+
 
 def format_eur(value: float) -> str:
     sign = "-" if value < 0 else ""
@@ -72,25 +93,138 @@ def format_shift(weather_shift: Dict[str, int]) -> str:
     return ", ".join(f"{project}: {days:+d}d" for project, days in weather_shift.items())
 
 
-def load_demo_state() -> Tuple[
-    ForecastConfig,
-    List[Transaction],
-    List[Project],
-    Dict[str, Forecast],
-]:
+def discover_files(suffixes: set[str]) -> List[str]:
+    base = Path.cwd()
+    out: List[str] = []
+    for path in base.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in {".git", "__pycache__"} for part in path.parts):
+            continue
+        if path.suffix.lower() in suffixes:
+            out.append(path.relative_to(base).as_posix())
+    return sorted(out)
+
+
+def resolve_data_path(raw_path: str, label: str) -> str:
+    cleaned = raw_path.strip()
+    if not cleaned:
+        raise FileNotFoundError(f"{label} path is empty")
+
+    path = Path(cleaned).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"{label} file not found: {path}")
+    return str(path)
+
+
+def sidebar_path_picker(label: str, suffixes: set[str], key: str) -> str:
+    options = [""] + discover_files(suffixes)
+    selected = st.sidebar.selectbox(f"Select {label}", options, key=f"{key}_select")
+    manual = st.sidebar.text_input(
+        f"{label} path",
+        placeholder="Enter a relative or absolute path",
+        key=f"{key}_input",
+    )
+    return manual.strip() or selected
+
+
+def build_forecast_bundle(
+    transactions: List[Transaction],
+    projects: List[Project],
+    cfg: ForecastConfig,
+) -> Tuple[Dict[str, Forecast], Dict[str, Dict[str, Forecast]], List[str]]:
+    forecasts: Dict[str, Forecast] = {}
+    opco_forecasts: Dict[str, Dict[str, Forecast]] = {}
+    build_notes: List[str] = []
+
+    for label, (scenario, weather_shift, _) in SCENARIOS.items():
+        try:
+            by_opco = build_all_opcos(
+                transactions,
+                projects,
+                scenario=scenario,
+                cfg=cfg,
+                weather_shift=weather_shift,
+            )
+            portfolio = by_opco.get("PORTFOLIO")
+            if portfolio is None:
+                raise KeyError("build_all_opcos did not return PORTFOLIO")
+            opco_forecasts[label] = by_opco
+            forecasts[label] = portfolio
+        except Exception as exc:
+            forecast = build_forecast(
+                transactions,
+                projects,
+                scenario=scenario,
+                cfg=cfg,
+                weather_shift=weather_shift,
+            )
+            forecasts[label] = forecast
+            opco_forecasts[label] = {"PORTFOLIO": forecast}
+            build_notes.append(
+                f"{label}: build_all_opcos failed; used build_forecast fallback ({exc})"
+            )
+
+    return forecasts, opco_forecasts, build_notes
+
+
+def load_stub_state(note: str = "") -> DashboardState:
     cfg = ForecastConfig()
     transactions, projects = make_stub(cfg)
-    forecasts = {
-        label: build_forecast(
-            transactions,
-            projects,
-            scenario=scenario,
-            cfg=cfg,
-            weather_shift=weather_shift,
+    forecasts, opco_forecasts, build_notes = build_forecast_bundle(transactions, projects, cfg)
+    return DashboardState(
+        cfg=cfg,
+        transactions=transactions,
+        projects=projects,
+        forecasts=forecasts,
+        opco_forecasts=opco_forecasts,
+        data_label="Demo stub data",
+        data_note=note or "Using synthetic Lane B/Lane C demo data.",
+        build_notes=build_notes,
+        using_stub=True,
+    )
+
+
+def load_real_state(transactions_path: str, projects_path: str) -> DashboardState:
+    cfg = ForecastConfig()
+    resolved_transactions = resolve_data_path(transactions_path, "Transactions")
+    resolved_projects = resolve_data_path(projects_path, "Projects")
+    transactions, summary = load_transactions(resolved_transactions)
+    projects = load_projects(resolved_projects)
+    forecasts, opco_forecasts, build_notes = build_forecast_bundle(transactions, projects, cfg)
+    return DashboardState(
+        cfg=cfg,
+        transactions=transactions,
+        projects=projects,
+        forecasts=forecasts,
+        opco_forecasts=opco_forecasts,
+        data_label="Real data",
+        data_note=(
+            f"Loaded {len(transactions):,} transactions and {len(projects):,} projects."
+        ),
+        transaction_summary=summary,
+        build_notes=build_notes,
+        using_stub=False,
+    )
+
+
+def load_dashboard_state(
+    data_mode: str,
+    transactions_path: str = "",
+    projects_path: str = "",
+) -> DashboardState:
+    if data_mode == "Demo stub data":
+        return load_stub_state()
+
+    try:
+        return load_real_state(transactions_path, projects_path)
+    except Exception as exc:
+        return load_stub_state(
+            f"Real data could not be loaded, so the dashboard fell back to demo stub data. "
+            f"Reason: {exc}"
         )
-        for label, (scenario, weather_shift, _) in SCENARIOS.items()
-    }
-    return cfg, transactions, projects, forecasts
 
 
 def cash_totals(forecast: Forecast) -> Tuple[float, float, float]:
@@ -161,6 +295,47 @@ def build_week_rows(forecast: Forecast) -> List[Dict[str, object]]:
             row[label] = round(drivers.get(driver, [0.0] * len(forecast.weeks))[week_index], 2)
         rows.append(row)
     return rows
+
+
+def warning_week_label(forecast: Forecast) -> str:
+    warning_week = covenant.first_breach_week(forecast.covenant_lights())
+    if warning_week is None:
+        return "None"
+    return f"W{warning_week} - {forecast.weeks[warning_week].isoformat()}"
+
+
+def covenant_week_rows(forecast: Forecast) -> List[Dict[str, object]]:
+    headroom = forecast.covenant_headroom()
+    lights = forecast.covenant_lights()
+    running_balance = forecast.running_balance()
+    return [
+        {
+            "week": f"W{index}",
+            "week_start": week.isoformat(),
+            "ending_cash": round(running_balance[index], 2),
+            "covenant_headroom": round(headroom[index], 2),
+            "traffic_light": lights[index],
+        }
+        for index, week in enumerate(forecast.weeks)
+    ]
+
+
+def render_covenant_panel(forecast: Forecast, title: str = "Covenant") -> None:
+    headroom = forecast.covenant_headroom()
+    lights = forecast.covenant_lights()
+    current_headroom = headroom[0] if headroom else 0.0
+    minimum_headroom = min(headroom) if headroom else 0.0
+
+    st.markdown(f"**{title}**")
+    cols = st.columns(3)
+    cols[0].metric("Current headroom (W0)", format_eur(current_headroom))
+    cols[1].metric("Minimum headroom", format_eur(minimum_headroom))
+    cols[2].metric("First amber/red", warning_week_label(forecast))
+
+    render_light(worst_light(lights), "Covenant traffic light")
+
+    st.markdown("**Covenant by week**")
+    st.dataframe(covenant_week_rows(forecast), use_container_width=True, hide_index=True)
 
 
 def source_label(record_id: str, transactions_by_id: Dict[str, Transaction]) -> str:
@@ -270,7 +445,6 @@ def render_cfo_tab(
 
     cash_in, cash_out, net_cash = cash_totals(forecast)
     ending_cash = forecast.running_balance()[-1]
-    light = worst_light(forecast.covenant_lights())
 
     metric_cols = st.columns(4)
     metric_cols[0].metric("Cash in", format_eur(cash_in))
@@ -278,7 +452,7 @@ def render_cfo_tab(
     metric_cols[2].metric("Net cash", format_eur(net_cash))
     metric_cols[3].metric("Ending cash", format_eur(ending_cash))
 
-    render_light(light)
+    render_covenant_panel(forecast, "Covenant")
 
     week_rows = build_week_rows(forecast)
     st.markdown("**13-week forecast**")
@@ -318,6 +492,10 @@ def render_cfo_tab(
 def render_opco_tab(projects: List[Project], weather_shift: Dict[str, int]) -> None:
     st.subheader("Opco MD")
     st.caption("Project risk, WIP exposure, and scenario-shifted milestones.")
+
+    if not projects:
+        st.info("No project records are loaded. Add a projects JSON file to populate this view.")
+        return
 
     opco_rows = []
     for opco in sorted({project.opco for project in projects}):
@@ -371,6 +549,10 @@ def render_project_lead_tab(
 ) -> None:
     st.subheader("Project Lead")
     st.caption("Next invoiceable milestone, weather timing, and project-level cash events.")
+
+    if not projects:
+        st.info("No project records are loaded. Add a projects JSON file to populate this view.")
+        return
 
     project_lookup = {project.project_id: project for project in projects}
     selected_project_id = st.selectbox(
@@ -437,47 +619,21 @@ def render_board_tab(
     st.subheader("PE Board")
     st.caption("Consolidated covenant status and portfolio-level summary.")
 
-    lights = forecast.covenant_lights()
-    light = worst_light(lights)
-    render_light(light, "Consolidated covenant status")
-
-    first_warning = covenant.first_breach_week(lights)
-    warning_text = "None"
-    if first_warning is not None:
-        warning_text = f"W{first_warning} - {forecast.weeks[first_warning].isoformat()}"
+    render_covenant_panel(forecast, "Consolidated covenant")
 
     cash_in, cash_out, net_cash = cash_totals(forecast)
     ending_cash = forecast.running_balance()[-1]
-    min_headroom = min(forecast.covenant_headroom())
     at_risk = sum(1 for project in projects if risk_level(project, weather_shift)[0] == "High")
 
     metric_cols = st.columns(4)
     metric_cols[0].metric("Ending cash", format_eur(ending_cash))
-    metric_cols[1].metric("Minimum headroom", format_eur(min_headroom))
-    metric_cols[2].metric("First warning", warning_text)
-    metric_cols[3].metric("High-risk projects", str(at_risk))
+    metric_cols[1].metric("Portfolio cash in", format_eur(cash_in))
+    metric_cols[2].metric("Portfolio cash out", format_eur(abs(cash_out)))
+    metric_cols[3].metric("Portfolio net cash", format_eur(net_cash))
 
-    summary_cols = st.columns(4)
-    summary_cols[0].metric("Portfolio cash in", format_eur(cash_in))
-    summary_cols[1].metric("Portfolio cash out", format_eur(abs(cash_out)))
-    summary_cols[2].metric("Portfolio net cash", format_eur(net_cash))
-    summary_cols[3].metric("Projects", str(len(projects)))
-
-    st.markdown("**Covenant by week**")
-    st.dataframe(
-        [
-            {
-                "week": f"W{index}",
-                "week_start": week.isoformat(),
-                "ending_cash": round(forecast.running_balance()[index], 2),
-                "headroom": round(forecast.covenant_headroom()[index], 2),
-                "light": lights[index],
-            }
-            for index, week in enumerate(forecast.weeks)
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
+    summary_cols = st.columns(2)
+    summary_cols[0].metric("High-risk projects", str(at_risk))
+    summary_cols[1].metric("Projects", str(len(projects)))
 
     st.markdown("**Scenario movement vs base**")
     ending_delta = forecast.running_balance()[-1] - base_forecast.running_balance()[-1]
@@ -513,8 +669,49 @@ def main() -> None:
     st.title("Altis Weather-Aware Cash Forecast")
     st.caption("Lane C dashboard over the existing forecast engine.")
 
-    _, transactions, projects, forecasts = load_demo_state()
+    data_mode = st.sidebar.selectbox(
+        "Data mode",
+        ["Demo stub data", "Real data"],
+        key="data_mode",
+    )
+
+    transactions_path = ""
+    projects_path = ""
+    if data_mode == "Real data":
+        st.sidebar.markdown("**Real data files**")
+        transactions_path = sidebar_path_picker(
+            "transactions",
+            TRANSACTION_SUFFIXES,
+            "transactions",
+        )
+        projects_path = sidebar_path_picker(
+            "projects",
+            PROJECT_SUFFIXES,
+            "projects",
+        )
+
+    state = load_dashboard_state(data_mode, transactions_path, projects_path)
+    transactions = state.transactions
+    projects = state.projects
+    forecasts = state.forecasts
     transactions_by_id = {txn.record_id: txn for txn in transactions}
+
+    st.sidebar.markdown("**Data status**")
+    if state.using_stub and data_mode == "Real data":
+        st.sidebar.warning(state.data_note)
+    elif state.using_stub:
+        st.sidebar.info(state.data_note)
+    else:
+        st.sidebar.success(state.data_note)
+
+    if state.transaction_summary:
+        with st.sidebar.expander("Transaction load summary"):
+            st.write(state.transaction_summary)
+
+    if state.build_notes:
+        with st.sidebar.expander("Forecast build notes"):
+            for note in state.build_notes:
+                st.write(note)
 
     selected_label = st.sidebar.selectbox("Scenario", list(SCENARIOS), key="scenario")
     scenario_name, weather_shift, scenario_note = SCENARIOS[selected_label]
@@ -525,6 +722,9 @@ def main() -> None:
     st.sidebar.write(scenario_note)
     st.sidebar.caption(f"Engine scenario: `{scenario_name}`")
     st.sidebar.caption(f"Weather shift: {format_shift(weather_shift)}")
+    st.sidebar.caption(
+        f"Forecast scope: {', '.join(state.opco_forecasts.get(selected_label, {}).keys())}"
+    )
 
     cfo_tab, opco_tab, project_tab, board_tab = st.tabs(
         ["CFO", "Opco MD", "Project Lead", "PE Board"]
