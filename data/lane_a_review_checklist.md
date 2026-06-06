@@ -76,10 +76,10 @@ Verify `data/reconciliation.json` sum_amount_incl_vat ties to raw Excel file tot
 
 | Source File | Sum in reconciliation.json | Raw Excel Total | Match? |
 |---|---|---|---|
-| GB 8000 jan-dec 23.xlsx | €569,442 | _________________ | ☐ |
-| GB 8001 jan-dec 23.xlsx | €12,266,234 | _________________ | ☐ |
-| Peter Ummels 2023 | €8,061,400 | _________________ | ☐ |
-| Altis dataset 2 — 2023 | €7,240,371 | _________________ | ☐ |
+| GB 8000 jan-dec 23.xlsx | €569,442.11 | €569,442.11 | ☑ |
+| GB 8001 jan-dec 23.xlsx | €12,266,233.82 | €12,266,233.82 | ☑ |
+| Peter Ummels 2023 | €8,061,400.37 | €8,061,400.37 | ☑ Also matches P&L JSON verified total €8,061,400 |
+| Altis dataset 2 — 2023 | €7,240,370.53 | €7,240,370.53 | ☑ |
 
 ---
 
