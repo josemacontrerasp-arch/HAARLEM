@@ -38,7 +38,12 @@ import pandas as pd
 
 from engine.schema import Transaction, validate_transaction
 
-OPCO = "PeterUmmels"
+# Dakdekkersbedrijf Peter Ummels IS the Brunssum operating company. Emit the
+# canonical opco name directly so the historical Yuki actuals reconcile to the
+# same opco as the P&L-calibrated pipeline (engine/pipeline.py: peter_ummels ->
+# Brunssum). Previously emitted "PeterUmmels", which never matched and split the
+# opco in two across the dashboard.
+OPCO = "Brunssum"
 SOURCE_SYSTEM = "yuki"
 DATA_DIR = "data/portfolio company 2 data"
 

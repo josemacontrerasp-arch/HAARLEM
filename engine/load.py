@@ -31,9 +31,12 @@ from .schema import (
 _TXN_FIELDS = {f.name for f in fields(Transaction)}
 
 # Lane A labels opcos generically; map to the real Altis operating companies so
-# the reconciled data lines up with the P&L and the project pipeline.
+# the reconciled data lines up with the P&L and the project pipeline. Keys cover
+# both generic Lane A labels and any legacy per-adapter labels, so an already-
+# reconciled transactions.csv self-heals on load (e.g. "PeterUmmels" -> Brunssum).
 OPCO_NORMALIZE = {
     "OpcoUmmels": "Brunssum",
+    "PeterUmmels": "Brunssum",
     "OpcoNoord": "Andijk",
     "OpcoWinschoten": "Winschoten",
     "CompanyE": "Heeze",

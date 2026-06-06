@@ -1,16 +1,16 @@
 {
-  "total_rows": 36894,
-  "total_sum_incl_vat": 122173638.62,
+  "total_rows": 36976,
+  "total_sum_incl_vat": 175336323.94,
   "unmapped_accounts": 0,
   "duplicate_record_ids": 0,
   "schema_violations": 0,
   "status_counts": {
-    "actual": 36549,
+    "actual": 36631,
     "wip": 16,
     "open_ar": 329
   },
   "driver_counts": {
-    "milestone_billing": 36848,
+    "milestone_billing": 36930,
     "other": 39,
     "customer_payment": 7
   },
@@ -212,6 +212,38 @@
       "rows_in": 329,
       "rows_out": 329,
       "sum_amount_incl_vat": 1171252.08,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 1.xlsx#2023",
+      "rows_in": 24,
+      "rows_out": 24,
+      "sum_amount_incl_vat": 13711379.7,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 1.xlsx#2024",
+      "rows_in": 24,
+      "rows_out": 24,
+      "sum_amount_incl_vat": 16594652.93,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 1.xlsx#2025",
+      "rows_in": 24,
+      "rows_out": 24,
+      "sum_amount_incl_vat": 15884286.51,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 1.xlsx#2026YTD",
+      "rows_in": 10,
+      "rows_out": 10,
+      "sum_amount_incl_vat": 6972366.18,
       "unmapped_accounts": 0,
       "schema_violations": []
     }

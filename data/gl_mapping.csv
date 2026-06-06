@@ -10,3 +10,5 @@ DS2-MMEM-WIP,snelstart,008 - MMEM,Memoriaal (memorial/adjustment journal),8001,W
 DS2-MMEM-ACCRUAL,snelstart,008 - MMEM,Memoriaal (memorial/adjustment journal),9000,Accrual reversal when invoice posted,other,Credit-side MMEM: reverses the WIP accrual once the real invoice is posted -> status=actual; adapter condition: is_credit=True
 DS2-KAS,snelstart,001 - Kas,Kasboek (cash journal),1100,Cash / bank,customer_payment,Cash receipts and payments
 DS2-GILDE,snelstart,60 - Verkoopboek Gilde,Verkoopboek Gilde (Gilde sales journal),8001,Revenue - reverse charge,milestone_billing,Gilde-routed reverse-charge sales booked in Snelstart
+EXACT-80000,exact,80000,Omzet hoog (21% BTW),8000,Revenue - standard rate,milestone_billing,High-rate VAT revenue (Andijk); monthly Netto-omzet matrix is net of VAT -> grossed up at 21%
+EXACT-80020,exact,80020,Omzet verlegd 21% (reverse charge),8001,Revenue - reverse charge,milestone_billing,Reverse-charge construction revenue (BTW verlegd); booked net of VAT
