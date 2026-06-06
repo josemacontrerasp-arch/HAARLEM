@@ -17,18 +17,24 @@ def _d(week_offset: int, cfg: ForecastConfig) -> date:
 def make_stub(cfg: ForecastConfig | None = None) -> Tuple[List[Transaction], List[Project]]:
     cfg = cfg or ForecastConfig()
 
+    # Committed outflows live on the project schedules (PRD section 6, drivers 1-2),
+    # NOT in GL — the real GL mapping is revenue-only. Amounts are gross (cash).
     projects = [
         Project("PRJ-118", "OpcoNoord", "Gemeente Haarlem", "government",
                 contract_value=480_000, wip_to_date=120_000, percent_complete=0.25,
                 weather_exposure=0.8,
                 milestones=[Milestone("M1", "Termijn 2 dak", _d(3, cfg), 60_000,
-                                      weather_dependent=True)]),
+                                      weather_dependent=True)],
+                materials_schedule=[Scheduled(_d(1, cfg), 60_500)],
+                subcontractor_schedule=[Scheduled(_d(2, cfg), 26_620, "M1")]),
         Project("PRJ-204", "OpcoZuid", "Bouwbedrijf Y", "enterprise",
                 contract_value=300_000, wip_to_date=90_000, percent_complete=0.40,
-                weather_exposure=0.2),
+                weather_exposure=0.2,
+                subcontractor_schedule=[Scheduled(_d(3, cfg), 18_150)]),
         Project("PRJ-091", "OpcoNoord", "Gemeente X", "government",
                 contract_value=210_000, wip_to_date=40_000, percent_complete=0.15,
-                weather_exposure=0.9),
+                weather_exposure=0.9,
+                materials_schedule=[Scheduled(_d(4, cfg), 21_780)]),
     ]
 
     def txn(rid, sys, file, row, opco, wk, native, unified, drv, excl, vat, cp, proj, status, desc):
@@ -41,20 +47,6 @@ def make_stub(cfg: ForecastConfig | None = None) -> Tuple[List[Transaction], Lis
         )
 
     transactions = [
-        # --- materials & subcontractor commitments (open_ap, outflows) ----------
-        txn("exact-1", "exact", "exact_export.csv", 204, "OpcoNoord", 1,
-            "7000", "4010", "materials", -50_000, -10_500, "DakStaal BV", "PRJ-118",
-            "open_ap", "Levering EPDM dakbedekking"),
-        txn("exact-2", "exact", "exact_export.csv", 205, "OpcoNoord", 2,
-            "7100", "4020", "subcontractor", -22_000, -4_620, "ZZP Dakteam", "PRJ-118",
-            "open_ap", "Onderaannemer week 2"),
-        txn("snel-1", "snelstart", "snel_export.csv", 51, "OpcoNoord", 4,
-            "7000", "4010", "materials", -18_000, -3_780, "DakStaal BV", "PRJ-091",
-            "open_ap", "Bitumen levering"),
-        txn("yuki-9", "yuki", "yuki_export.csv", 12, "OpcoZuid", 3,
-            "7100", "4020", "subcontractor", -15_000, -3_150, "ZZP Zuid", "PRJ-204",
-            "open_ap", "Onderaannemer dakrenovatie"),
-
         # --- invoices issued, unpaid (open_ar, inflows after payment lag) -------
         txn("yuki-88", "yuki", "yuki_export.csv", 88, "OpcoZuid", 1,
             "8000", "1300", "milestone_billing", 12_000, 2_520, "Bouwbedrijf Y", "PRJ-204",

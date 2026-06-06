@@ -184,7 +184,44 @@ def build_forecast(
             computation=comp,
         ))
 
+    # --- committed outflows from the project schedules (PRD section 6, drivers
+    # 1-2). The real GL is revenue-only, so materials/subcontractor cash comes
+    # from here. Materials are locked (no weather slip); subcontractor is tied to
+    # milestones (slips with weather) -> this is what creates the squeeze.
+    for p in projects:
+        if opco is not None and p.opco != opco:
+            continue
+        exposed = p.weather_exposure > 0
+        _add_schedule(fc, p, p.materials_schedule, "materials",
+                      movable=False, exposed=exposed, weather_shift=weather_shift,
+                      scenario=scenario, cfg=cfg)
+        _add_schedule(fc, p, p.subcontractor_schedule, "subcontractor",
+                      movable=True, exposed=exposed, weather_shift=weather_shift,
+                      scenario=scenario, cfg=cfg)
+
     return fc
+
+
+def _add_schedule(fc, project, schedule, driver, movable, exposed,
+                  weather_shift, scenario, cfg):
+    for i, s in enumerate(schedule):
+        eff_date = s.date
+        assumptions: List[str] = []
+        slip = weather_shift.get(project.project_id, 0) if (movable and exposed) else 0
+        if slip:
+            eff_date = eff_date + timedelta(days=slip)
+            assumptions.append(f"weather_slip=+{slip}d")
+        week = _week_index(eff_date, cfg.anchor_monday, cfg.horizon_weeks)
+        if week is None:
+            continue
+        fc.contributions.append(TracedValue(
+            value=-abs(s.amount), week=week, driver=driver,
+            contributing_records=[f"sched:{project.project_id}:{driver}:{i}"],
+            assumptions_applied=assumptions,
+            scenario=scenario,
+            toggle_values={"weather_shift": dict(weather_shift)},
+            computation=f"{driver} schedule {-abs(s.amount):,.0f} ({project.project_id})",
+        ))
 
 
 def build_all_opcos(
