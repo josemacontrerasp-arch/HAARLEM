@@ -4,7 +4,7 @@
 
 ---
 
-## Samo (Lane A — Data)
+## Lane A — Data
 - [ ] Fill in `data/lane_a_review_checklist.md` — sign off on all LLM mapping decisions before submission
 
 ---
