@@ -51,6 +51,12 @@ submission. With no password configured (a local clone), the app runs open.
 
 ---
 
+## One-slide overview
+
+![Altis — Weather-Aware Cash-Flow Forecast (pitch slide)](slide.png)
+
+---
+
 ## What it is, in one breath
 
 > A **scenario-driven forecasting engine, statistically calibrated.**

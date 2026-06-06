@@ -1218,7 +1218,7 @@ def render_cash_chart(forecast: Forecast) -> None:
         .mark_area(color=BRAND_GREEN, opacity=0.12)
         .encode(x="week_start:T", y="ending_cash:Q")
     )
-    st.altair_chart(themed_chart(area + line), width="stretch")
+    st.altair_chart(themed_chart(area + line), use_container_width=True)
 
 
 def render_driver_donut(forecast: Forecast) -> None:
@@ -1240,7 +1240,7 @@ def render_driver_donut(forecast: Forecast) -> None:
         )
         .properties(height=285)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_weekly_driver_bars(forecast: Forecast) -> None:
@@ -1263,7 +1263,7 @@ def render_weekly_driver_bars(forecast: Forecast) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_wip_bar(projects: List[Project]) -> None:
@@ -1293,7 +1293,7 @@ def render_wip_bar(projects: List[Project]) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -> Optional[str]:
@@ -1420,9 +1420,9 @@ def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -
           sources: {{
             osm: {{
               type: "raster",
-              tiles: ["https://a.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", "https://b.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png"],
+              tiles: ["https://a.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png", "https://b.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png", "https://c.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png"],
               tileSize: 256,
-              attribution: "© OpenStreetMap contributors"
+              attribution: "© OpenStreetMap contributors © CARTO"
             }}
           }},
           layers: [{{ id: "osm", type: "raster", source: "osm" }}]
@@ -1515,7 +1515,8 @@ def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -
     </body>
     </html>
     """
-    st.iframe(html_data_uri(map_html), width="stretch", height=452)
+    import streamlit.components.v1 as components
+    components.html(map_html, height=452, scrolling=False)
     return None
 
 
@@ -1800,7 +1801,7 @@ def render_project_lead_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), width="stretch")
+        st.altair_chart(themed_chart(chart), use_container_width=True)
         st.dataframe(events, width="stretch", hide_index=True)
     else:
         alert_box("No forecast cash events for this project land inside the 13-week horizon.")
@@ -1862,7 +1863,7 @@ def render_board_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), width="stretch")
+        st.altair_chart(themed_chart(chart), use_container_width=True)
         st.dataframe(mover_df, width="stretch", hide_index=True)
     else:
         alert_box("No scenario movement versus base.")
