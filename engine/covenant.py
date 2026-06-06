@@ -81,3 +81,46 @@ def first_breach_week(lights_seq: List[str]) -> Optional[int]:
         if l in ("amber", "red"):
             return i
     return None
+
+
+def quarterly_test_weeks(weeks) -> List[int]:
+    """The single week index that contains each quarter-end (Mar 31 / Jun 30 /
+    Sep 30 / Dec 31) inside the horizon — the covenant's actual test dates.
+
+    The leverage covenant is tested QUARTERLY, so the binding number is the
+    projected leverage at the next quarter-end. We compute weekly headroom for the
+    trend line, but the pass/fail that matters is at these points.
+    """
+    from datetime import date as _date, timedelta as _td
+    if not weeks:
+        return []
+    ends = []
+    for yr in range(weeks[0].year, weeks[-1].year + 1):
+        ends += [_date(yr, 3, 31), _date(yr, 6, 30), _date(yr, 9, 30), _date(yr, 12, 31)]
+    out = []
+    for qe in ends:
+        for i, mon in enumerate(weeks):
+            if mon <= qe < mon + _td(days=7):
+                out.append(i)
+                break
+    return out
+
+
+def next_test_week(weeks) -> Optional[int]:
+    tests = quarterly_test_weeks(weeks)
+    return tests[0] if tests else None
+
+
+def test_summary(weeks, headroom: List[float], cfg: ForecastConfig) -> List[dict]:
+    """At each quarterly test week: the headroom and pass/fail. This is what the
+    Board view shows — 'where do we land at the next covenant test?'"""
+    light = lights(headroom, cfg)
+    use = quarterly_test_weeks(weeks) if cfg.covenant_test_cadence == "quarterly" \
+        else list(range(len(weeks)))
+    return [{
+        "week": i,
+        "date": weeks[i].isoformat(),
+        "headroom": headroom[i],
+        "light": light[i],
+        "pass": headroom[i] >= 0,
+    } for i in use]
