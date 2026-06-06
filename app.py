@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import copy
 import inspect
+import json
 import os
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -12,7 +13,6 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import altair as alt
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
 
 from engine import (
@@ -226,6 +226,10 @@ def data_uri(path: Path) -> str:
         ".webp": "image/webp",
     }.get(path.suffix.lower(), "image/png")
     return f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
+
+def html_data_uri(html: str) -> str:
+    return f"data:text/html;base64,{base64.b64encode(html.encode('utf-8')).decode('ascii')}"
 
 
 def logo_html(size: str = "sidebar") -> str:
@@ -1054,12 +1058,21 @@ def risk_level(project: Project, weather_shift: Dict[str, int]) -> Tuple[str, st
     return "Stable", "no material scenario pressure"
 
 
-def risk_color(level: str) -> List[int]:
+def risk_color(level: str) -> str:
     return {
-        "High": [239, 68, 68, 215],
-        "Watch": [245, 158, 11, 215],
-        "Stable": [71, 168, 133, 215],
-    }.get(level, [20, 59, 90, 215])
+        "High": BRAND_RED,
+        "Watch": BRAND_AMBER,
+        "Stable": BRAND_GREEN,
+    }.get(level, BRAND_NAVY)
+
+
+def marker_sizes(level: str, contract_value: float) -> Tuple[int, int, int]:
+    value_step = min(3, int(max(contract_value, 0) / 450_000))
+    base = {"Stable": 11, "Watch": 13, "High": 15}.get(level, 12) + value_step
+    zoom_out = min(24, base + 8)
+    zoom_mid = min(18, max(9, base))
+    zoom_in = max(5, base - 6)
+    return zoom_out, zoom_mid, zoom_in
 
 
 def project_base_location(project: Project) -> Tuple[float, float]:
@@ -1082,6 +1095,8 @@ def project_map_rows(projects: List[Project], weather_shift: Dict[str, int]) -> 
         lat += ((index % 3) - 1) * 0.018
         lon += ((index // 3) - 1) * 0.028
         risk, reason = risk_level(project, weather_shift)
+        zoom_out, zoom_mid, zoom_in = marker_sizes(risk, project.contract_value)
+        shift = weather_shift.get(project.project_id, 0)
         rows.append(
             {
                 "project_id": project.project_id,
@@ -1094,9 +1109,18 @@ def project_map_rows(projects: List[Project], weather_shift: Dict[str, int]) -> 
                 "contract_value": project.contract_value,
                 "wip": project.wip_to_date,
                 "weather_exposure": project.weather_exposure,
-                "shift": weather_shift.get(project.project_id, 0),
+                "shift": shift,
+                "scenario_impact": format_days(shift) if shift else "No scenario shift",
                 "color": risk_color(risk),
-                "radius": max(5500, min(21000, project.contract_value / 24)),
+                "marker_zoom_out": zoom_out,
+                "marker_mid": zoom_mid,
+                "marker_zoom_in": zoom_in,
+                "marker_select_zoom_out": min(28, zoom_out + 4),
+                "marker_select_mid": min(22, zoom_mid + 4),
+                "marker_select_zoom_in": min(14, zoom_in + 3),
+                "wip_display": format_eur(project.wip_to_date),
+                "contract_display": format_eur(project.contract_value),
+                "weather_display": f"{project.weather_exposure:.0%}",
             }
         )
     return rows
@@ -1194,7 +1218,7 @@ def render_cash_chart(forecast: Forecast) -> None:
         .mark_area(color=BRAND_GREEN, opacity=0.12)
         .encode(x="week_start:T", y="ending_cash:Q")
     )
-    st.altair_chart(themed_chart(area + line), use_container_width=True)
+    st.altair_chart(themed_chart(area + line), width="stretch")
 
 
 def render_driver_donut(forecast: Forecast) -> None:
@@ -1216,7 +1240,7 @@ def render_driver_donut(forecast: Forecast) -> None:
         )
         .properties(height=285)
     )
-    st.altair_chart(themed_chart(chart), use_container_width=True)
+    st.altair_chart(themed_chart(chart), width="stretch")
 
 
 def render_weekly_driver_bars(forecast: Forecast) -> None:
@@ -1239,7 +1263,7 @@ def render_weekly_driver_bars(forecast: Forecast) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), use_container_width=True)
+    st.altair_chart(themed_chart(chart), width="stretch")
 
 
 def render_wip_bar(projects: List[Project]) -> None:
@@ -1269,7 +1293,7 @@ def render_wip_bar(projects: List[Project]) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), use_container_width=True)
+    st.altair_chart(themed_chart(chart), width="stretch")
 
 
 def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -> Optional[str]:
@@ -1281,65 +1305,217 @@ def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -
     df = pd.DataFrame(rows)
     center_lat = float(df["lat"].mean())
     center_lon = float(df["lon"].mean())
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df,
-        id="projects",
-        get_position="[lon, lat]",
-        get_radius="radius",
-        get_fill_color="color",
-        pickable=True,
-        auto_highlight=True,
-    )
-    map_style = (
-        "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-        if st.session_state.get("theme_mode") == "Dark Mode"
-        else "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-    )
-    deck = pdk.Deck(
-        map_style=map_style,
-        initial_view_state=pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=6.2, pitch=0),
-        layers=[layer],
-        tooltip={
-            "html": (
-                "<b>{project_id}</b><br/>{opco}<br/>Risk: {risk}<br/>"
-                "WIP: EUR {wip}<br/>Weather shift: {shift} days"
-            ),
-            "style": {"backgroundColor": "#143B5A", "color": "white"},
-        },
-    )
+    theme = current_theme()
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [row["lon"], row["lat"]]},
+            "properties": row,
+        }
+        for row in rows
+    ]
+    geojson = {"type": "FeatureCollection", "features": features}
+    map_html = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+      <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+      <style>
+        body {{
+          margin: 0;
+          background: {theme["card"]};
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        #map {{
+          width: 100%;
+          height: 430px;
+          border-radius: 16px;
+          overflow: hidden;
+          border: 1px solid {theme["line"]};
+        }}
+        .maplibregl-popup-content {{
+          border-radius: 14px;
+          box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+          border: 1px solid {theme["line"]};
+          background: {theme["card"]};
+          color: {theme["text"]};
+          min-width: 240px;
+          padding: 0;
+        }}
+        .maplibregl-popup-tip {{
+          border-top-color: {theme["card"]} !important;
+          border-bottom-color: {theme["card"]} !important;
+        }}
+        .popup-head {{
+          background: {BRAND_NAVY};
+          color: white;
+          padding: 0.75rem 0.85rem;
+          border-radius: 13px 13px 0 0;
+          font-weight: 800;
+        }}
+        .popup-body {{
+          padding: 0.75rem 0.85rem;
+          font-size: 0.85rem;
+          line-height: 1.45;
+        }}
+        .popup-row {{
+          display: flex;
+          justify-content: space-between;
+          gap: 0.8rem;
+          border-bottom: 1px solid {theme["line"]};
+          padding: 0.25rem 0;
+        }}
+        .popup-row:last-child {{
+          border-bottom: 0;
+        }}
+        .popup-label {{
+          color: {theme["muted"]};
+          font-weight: 700;
+        }}
+        .popup-value {{
+          color: {theme["text"]};
+          font-weight: 800;
+          text-align: right;
+        }}
+        .legend {{
+          position: absolute;
+          left: 12px;
+          bottom: 12px;
+          z-index: 1;
+          background: {theme["card"]};
+          color: {theme["text"]};
+          border: 1px solid {theme["line"]};
+          border-radius: 12px;
+          padding: 0.55rem 0.7rem;
+          font-size: 0.78rem;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+        }}
+        .legend-row {{
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          margin: 0.18rem 0;
+        }}
+        .dot {{
+          width: 0.7rem;
+          height: 0.7rem;
+          border-radius: 999px;
+          display: inline-block;
+        }}
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <div class="legend">
+        <div class="legend-row"><span class="dot" style="background:{BRAND_GREEN}"></span> Low risk</div>
+        <div class="legend-row"><span class="dot" style="background:{BRAND_AMBER}"></span> Medium risk</div>
+        <div class="legend-row"><span class="dot" style="background:{BRAND_RED}"></span> High risk</div>
+      </div>
+      <script>
+        const geojson = {json.dumps(geojson)};
+        const rasterStyle = {{
+          version: 8,
+          sources: {{
+            osm: {{
+              type: "raster",
+              tiles: ["https://a.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", "https://b.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png"],
+              tileSize: 256,
+              attribution: "© OpenStreetMap contributors"
+            }}
+          }},
+          layers: [{{ id: "osm", type: "raster", source: "osm" }}]
+        }};
 
-    event = None
-    try:
-        event = st.pydeck_chart(
-            deck,
-            use_container_width=True,
-            height=430,
-            key="opco_project_map",
-            on_select="rerun",
-            selection_mode="single-object",
-        )
-    except TypeError:
-        st.pydeck_chart(deck, use_container_width=True)
+        function safe(value) {{
+          return String(value ?? "").replace(/[&<>"']/g, c => ({{
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+          }}[c]));
+        }}
 
-    return selected_project_from_map(event)
+        function popupHtml(p) {{
+          return `
+            <div class="popup-head">${{safe(p.project_id)}} · ${{safe(p.opco)}}</div>
+            <div class="popup-body">
+              <div class="popup-row"><span class="popup-label">Risk level</span><span class="popup-value">${{safe(p.risk)}}</span></div>
+              <div class="popup-row"><span class="popup-label">WIP amount</span><span class="popup-value">${{safe(p.wip_display)}}</span></div>
+              <div class="popup-row"><span class="popup-label">Contract value</span><span class="popup-value">${{safe(p.contract_display)}}</span></div>
+              <div class="popup-row"><span class="popup-label">Weather exposure</span><span class="popup-value">${{safe(p.weather_display)}}</span></div>
+              <div class="popup-row"><span class="popup-label">Scenario impact</span><span class="popup-value">${{safe(p.scenario_impact)}}</span></div>
+            </div>`;
+        }}
 
+        const map = new maplibregl.Map({{
+          container: "map",
+          style: rasterStyle,
+          center: [{center_lon}, {center_lat}],
+          zoom: 6.2,
+          minZoom: 4.5,
+          maxZoom: 13
+        }});
+        map.addControl(new maplibregl.NavigationControl({{ showCompass: false }}), "top-right");
 
-def selected_project_from_map(event) -> Optional[str]:
-    if event is None:
-        return None
-    selection = getattr(event, "selection", None)
-    if selection is None:
-        return None
-    if hasattr(selection, "to_dict"):
-        selection = selection.to_dict()
-    objects = selection.get("objects") if isinstance(selection, dict) else None
-    if isinstance(objects, dict):
-        for value in objects.values():
-            if value:
-                return value[0].get("project_id")
-    if isinstance(objects, list) and objects:
-        return objects[0].get("project_id")
+        const radiusByZoom = [
+          "interpolate", ["linear"], ["zoom"],
+          4.5, ["get", "marker_zoom_out"],
+          7, ["get", "marker_mid"],
+          11, ["get", "marker_zoom_in"],
+          13, 5
+        ];
+        const selectedRadiusByZoom = [
+          "interpolate", ["linear"], ["zoom"],
+          4.5, ["get", "marker_select_zoom_out"],
+          7, ["get", "marker_select_mid"],
+          11, ["get", "marker_select_zoom_in"],
+          13, 8
+        ];
+
+        map.on("load", () => {{
+          map.addSource("projects", {{ type: "geojson", data: geojson }});
+          map.addLayer({{
+            id: "projects",
+            type: "circle",
+            source: "projects",
+            paint: {{
+              "circle-radius": radiusByZoom,
+              "circle-color": ["get", "color"],
+              "circle-opacity": 0.88,
+              "circle-stroke-color": "{theme["card"]}",
+              "circle-stroke-width": 2
+            }}
+          }});
+          map.addLayer({{
+            id: "project-selected",
+            type: "circle",
+            source: "projects",
+            filter: ["==", ["get", "project_id"], ""],
+            paint: {{
+              "circle-radius": selectedRadiusByZoom,
+              "circle-color": ["get", "color"],
+              "circle-opacity": 0.18,
+              "circle-stroke-color": "{BRAND_NAVY if st.session_state.get("theme_mode") != "Dark Mode" else "#FFFFFF"}",
+              "circle-stroke-width": 4
+            }}
+          }});
+
+          map.on("mouseenter", "projects", () => map.getCanvas().style.cursor = "pointer");
+          map.on("mouseleave", "projects", () => map.getCanvas().style.cursor = "");
+          map.on("click", "projects", (event) => {{
+            const feature = event.features[0];
+            const p = feature.properties;
+            map.setFilter("project-selected", ["==", ["get", "project_id"], p.project_id]);
+            new maplibregl.Popup({{ closeButton: true, closeOnClick: true, offset: 12 }})
+              .setLngLat(feature.geometry.coordinates)
+              .setHTML(popupHtml(p))
+              .addTo(map);
+          }});
+        }});
+      </script>
+    </body>
+    </html>
+    """
+    st.iframe(html_data_uri(map_html), width="stretch", height=452)
     return None
 
 
@@ -1624,7 +1800,7 @@ def render_project_lead_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), use_container_width=True)
+        st.altair_chart(themed_chart(chart), width="stretch")
         st.dataframe(events, width="stretch", hide_index=True)
     else:
         alert_box("No forecast cash events for this project land inside the 13-week horizon.")
@@ -1686,7 +1862,7 @@ def render_board_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), use_container_width=True)
+        st.altair_chart(themed_chart(chart), width="stretch")
         st.dataframe(mover_df, width="stretch", hide_index=True)
     else:
         alert_box("No scenario movement versus base.")
