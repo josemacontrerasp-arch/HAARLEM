@@ -142,9 +142,16 @@ def resolve_data_path(raw_path: str, label: str) -> str:
     return str(path)
 
 
-def sidebar_path_picker(label: str, suffixes: set[str], key: str) -> str:
+def sidebar_path_picker(label: str, suffixes: set[str], key: str, prefer: str = "") -> str:
     options = [""] + discover_files(suffixes)
-    selected = st.sidebar.selectbox(f"Select {label}", options, key=f"{key}_select")
+    default_index = 0
+    if prefer:
+        for i, opt in enumerate(options):
+            if prefer.lower() in opt.lower():
+                default_index = i
+                break
+    selected = st.sidebar.selectbox(
+        f"Select {label}", options, index=default_index, key=f"{key}_select")
     manual = st.sidebar.text_input(
         f"{label} path",
         placeholder="Enter a relative or absolute path",
@@ -221,6 +228,7 @@ def load_stub_state(note: str = "") -> DashboardState:
     )
 
 
+DEFAULT_TXN_PATH = "data/transactions.csv"
 DEFAULT_PL_PATH = "data/Altis Groep — Portfolio P&L Data (Aggregated).json"
 
 
@@ -232,9 +240,13 @@ def load_real_state(transactions_path: str, projects_path: str) -> DashboardStat
     from engine.load import load_full_state
 
     cfg = ForecastConfig()
-    resolved_transactions = resolve_data_path(transactions_path, "Transactions")
+    resolved_transactions = resolve_data_path(transactions_path or DEFAULT_TXN_PATH, "Transactions")
     pl_path = resolve_data_path(projects_path, "P&L") if projects_path.strip() else DEFAULT_PL_PATH
     transactions, projects, cfg, summary = load_full_state(resolved_transactions, pl_path, cfg)
+    if not any(t.status in ("open_ar", "open_ap", "wip") for t in transactions):
+        raise ValueError(
+            "Selected transactions file has no forecastable rows — did you pick the "
+            "right file? Use data/transactions.csv (the reconciled table).")
     forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
         transactions, projects, cfg
     )
@@ -730,11 +742,13 @@ def main() -> None:
             "transactions",
             TRANSACTION_SUFFIXES,
             "transactions",
+            prefer="transactions.csv",
         )
         projects_path = sidebar_path_picker(
-            "projects",
+            "P&L (or leave blank)",
             PROJECT_SUFFIXES,
             "projects",
+            prefer="P&L",
         )
 
     state = load_dashboard_state(data_mode, transactions_path, projects_path)
