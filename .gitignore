@@ -13,6 +13,7 @@ portfolio company*/
 
 # ---- generated engine output ----
 forecast_*.json
+*.log
 
 # ---- OS / tooling / local ----
 .DS_Store
