@@ -23,6 +23,7 @@ from .load import (
     opening_balance_from_actuals,
     suggest_anchor,
 )
+from .ebitda import OpcoEbitda, PortfolioEbitda, compute_portfolio_ebitda
 from .weather import days_lost_for_projects, scenario_shift, summarise_weather
 from .schema import (
     Milestone,
@@ -45,4 +46,5 @@ __all__ = [
     "estimate_weather_coeffs", "predict_days_lost",
     "load_state", "suggest_anchor", "opening_balance_from_actuals",
     "days_lost_for_projects", "scenario_shift", "summarise_weather",
+    "OpcoEbitda", "PortfolioEbitda", "compute_portfolio_ebitda",
 ]
