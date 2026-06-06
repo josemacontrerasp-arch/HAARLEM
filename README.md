@@ -11,6 +11,17 @@ to the board — not a dashboard they have to take on faith.
 
 ---
 
+## How this maps to the scoring
+
+| Criterion | Where we earn it |
+|---|---|
+| **Impact & Relevance** | A defensible forecast a CFO would open Monday; the materials-vs-billing squeeze; liquidity-vs-leverage distinction |
+| **Technical Depth** | 3 systems reconciled into one schema; survives UNMAPPED / corrections / slips; per-opco = consolidated, proven by test |
+| **Auditability** | Every cell → driver → assumption → toggle → source line; one source of truth feeds all four roles |
+| **Innovation** | Weather as a causal delay operator (not a multiplier); scenario-driven + statistically calibrated; the squeeze made visible |
+
+---
+
 ## What it is, in one breath
 
 > A **scenario-driven forecasting engine, statistically calibrated.**
@@ -87,19 +98,17 @@ A clean pipeline, each stage swappable:
  │ Gilde      │   │ schema   → one canonical transaction record │   │ CFO       │
  │ Yuki       │──▶│ load     → reconcile + project pipeline      │──▶│ Opco MD   │
  │ Snelstart  │   │ drivers  → 5 streams, week by week           │   │ Proj Lead │
- │ Exact      │   │ weather  → scenario delay operator           │   │ PE Board  │
+ │ (Exact*)   │   │ weather  → scenario delay operator           │   │ PE Board  │
  └────────────┘   │ covenant → headroom + traffic light          │   └───────────┘
    GL mapping     │ learn    → 2 calibrated coefficients          │   one object,
-   (LLM-assisted, │ trace()  → every cell → source journal line   │   all views
-    controller-   └──────────────────────────────────────────────┘
-    approved)
+   (controller-   │ trace()  → every cell → source journal line   │   all views
+    approved)     └──────────────────────────────────────────────┘
 ```
 
 | File | Responsibility |
 |---|---|
-| `ingest_gilde.py`, `ingest_yuki.py`, `ingest_snelstart.py`, `ingest_exact.py`, `ingest_all.py` | Per-system adapters (**all four systems**) → one canonical schema |
-| `llm_gl_mapping.py` | LLM-assisted GL mapping (OpenAI or Anthropic, with a keyless heuristic fallback): model suggests unified account + driver with confidence + rationale → controller approves/rejects → logged & agreement-rate scored |
-| `data/gl_mapping.csv` | Chart-of-accounts mapping (controller-approved rules) |
+| `ingest_gilde.py`, `ingest_yuki.py`, `ingest_snelstart.py`, `ingest_all.py` | Per-system adapters → one canonical schema |
+| `data/gl_mapping.csv` | Chart-of-accounts mapping (controller-approvable rules) |
 | `engine/schema.py` | The canonical contract: transaction, project/milestone, **trace metadata** |
 | `engine/load.py` | Load reconciled data, normalise opcos, build the real-data state |
 | `engine/forecast.py` | The spine: 13-week forecast, drivers, `trace()`, per-opco + consolidated |
@@ -113,17 +122,23 @@ A clean pipeline, each stage swappable:
 
 ## Run it
 
+**Prerequisites:** Python 3.9+, pip.
+
 ```bash
 pip install -r requirements.txt
 
+# Step 1 — reconcile raw data into the canonical table (Lane A)
+python ingest_all.py        # → data/transactions.csv + data/reconciliation.json
+
+# Step 2 — run the app
 streamlit run app.py        # the dashboard (four role views, scenario toggle, drill-down)
-py run_demo.py              # headless: forecast + covenant + an audit-trail walkthrough
-py ingest_all.py            # reconcile all FOUR systems → data/transactions.csv
-py llm_gl_mapping.py --demo-new   # LLM-assisted GL mapping: suggestions + controller approve/reject + agreement rate
-                                  #   keyless heuristic by default. For the LLM backend, copy .env.example -> .env and
-                                  #   paste OPENAI_API_KEY (or ANTHROPIC_API_KEY); it's auto-loaded and gitignored.
-py tests.py                 # 18 engine invariants (traceability, reconciliation, mapping, covenant…)
+
+# Optional
+python run_demo.py          # headless: forecast + covenant + audit-trail walkthrough
+python tests.py             # 14 engine invariants (traceability, reconciliation, covenant…)
 ```
+
+**No raw data?** The app falls back to the built-in stub dataset automatically — all views and drill-downs work, on synthetic-but-realistic numbers.
 
 The engine core is pure Python standard library; `numpy` powers the two
 coefficients, `duckdb` reads reconciled tables, `streamlit` runs the UI.
@@ -153,8 +168,7 @@ traces sum **exactly** to the cell they explain.
 ## Built-in resilience (survives the edge cases)
 
 - **New / unknown GL account** → flagged `UNMAPPED`, kept (never dropped), bucketed
-  so the forecast doesn't break — and `llm_gl_mapping.py --demo-new` shows the model
-  proposing a mapping for it, held for the controller to approve.
+  so the forecast doesn't break.
 - **Late correction journal** → modelled via the status lifecycle (`actual` vs
   accrual vs WIP), so corrections don't double-count cash.
 - **Slipping project** → that's the weather operator's normal behaviour, not a
@@ -177,7 +191,7 @@ Rather than invent precise numbers, we use **explicit industry-standard assumpti
 | Covenant cap | **3.5×** | Typical mid-market covenant |
 | Opening cash | ~1.75 months of revenue | No bank export was provided |
 | Project pipeline | calibrated to each opco's real revenue | No WIP file was provided (the brief allows *realistic* data) |
-| Weather impact | threshold "unworkable-day" model, KNMI-calibrated per quarter | Anchored to Dutch **CAO Onwerkbaar weer / UAV 2012** + **KNMI** norms — see [`altis_weather_model_validation.md`](altis_weather_model_validation.md) |
+| Weather impact | threshold "unworkable-day" model, KNMI-calibrated per quarter | Anchored to Dutch **CAO Onwerkbaar weer / UAV 2012** + **KNMI** norms — see [`altis_weather_model_validation.md`](altis_weather_model_validation.md) for full validation (historical rain/frost day counts, coefficient derivation, scenario thresholds) |
 
 **Liquidity vs leverage (a real finding):** a quarterly TTM leverage covenant
 barely reacts to 13-week cash timing, so the weather cascade is surfaced on the
@@ -194,11 +208,8 @@ P&L file are git-ignored and must not be redistributed.
 
 ---
 
-## How this maps to the scoring
+## Auditability evidence
 
-| Criterion | Where we earn it |
-|---|---|
-| **Impact & Relevance** | A defensible forecast a CFO would open Monday; the materials-vs-billing squeeze; liquidity-vs-leverage distinction |
-| **Technical Depth** | **4 systems** reconciled into one schema; survives UNMAPPED / corrections / slips; per-opco = consolidated, proven by test |
-| **Auditability** | Every cell → driver → assumption → toggle → source line; LLM mapping suggestions logged with confidence + rationale + approve/reject; one source of truth feeds all four roles |
-| **Innovation** | Weather as a causal delay operator (not a multiplier); scenario-driven + statistically calibrated; the squeeze made visible; LLM GL mapping that degrades to a keyless heuristic so the demo always runs |
+LLM-assisted GL mapping decisions were reviewed and signed off by a human controller before submission. The review covers all 11 mapping rules, VAT rates, opco assignments, sign convention, reconciliation totals, and open AR treatment.
+
+See [`data/lane_a_review_checklist.md`](data/lane_a_review_checklist.md) — reviewed and signed: **Samuel Vohnout, 2026-06-06**.
