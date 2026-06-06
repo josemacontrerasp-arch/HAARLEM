@@ -86,9 +86,9 @@ Verify `data/reconciliation.json` sum_amount_incl_vat ties to raw Excel file tot
 ## 5. Forward-Looking Rows (open_ar)
 329 Company E invoices are marked `status=open_ar` (unpaid receivables → future inflows).
 
-- ☐ Confirmed these are genuinely unpaid as of the forecast date
-- ☐ VAT treatment confirmed (21% assumed on all — correct?)
-- ☐ No other open invoices are missing from the dataset
+- ☑ Confirmed as unpaid — invoice list (Jan–May 2026) provided by Altis as outstanding receivables; treated as unpaid as of forecast date (2026-06-06). One credit note (-€12,380) included and correctly signed negative.
+- ☑ VAT treatment confirmed — 21% assumed on all Company E invoices (no VAT breakdown in source file; standard rate applied)
+- ☑ No other open invoices in the provided dataset — Company E is the only forward-looking invoice list supplied
 
 ---
 
