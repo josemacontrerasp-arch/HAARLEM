@@ -1,5 +1,7 @@
 # Altis Groep — Weather-Aware 13-Week Cash-Flow Forecast & Role-Based Dashboards
 
+[![tests](https://github.com/josemacontrerasp-arch/HAARLEM/actions/workflows/tests.yml/badge.svg)](https://github.com/josemacontrerasp-arch/HAARLEM/actions/workflows/tests.yml)
+
 **One reconciled engine. Four accounting systems. Four role views. Five cash-flow
 drivers. A weather toggle that cascades all the way to the covenant light — and
 every single number clicks down to the journal line behind it.**
@@ -89,6 +91,12 @@ Committed **materials stay put** while **billing slides** — that gap *is* the 
 squeeze, and it falls straight out of the model instead of being faked. A unit test
 (`weather slips revenue but NOT committed materials`) asserts exactly this.
 
+**Live weather, honestly scoped:** the **Project Lead** tab pulls a **real, current
+Open-Meteo forecast per opco location** (keyless) and scores it with the roofing
+unworkable-day thresholds — the near-term schedule-risk signal. Because no forecast
+reaches 13 weeks out, the **scenario engine** runs on **KNMI climatology** for the
+full horizon. Live signal where it's real; climatology where it must be.
+
 ---
 
 ## The four roles (one engine, no two numbers disagree)
@@ -114,8 +122,12 @@ Consistency is structural, not maintained by hand — proven by the test
 | **Customer payment behaviour** | Receivable lands at invoice date **+ lag**, per customer segment | Collections shift further right |
 | **Weather impact** | Not a line item — the **operator** that shifts the timing of all the above | The cause of every shift |
 
-Cash is never lumped. Click any week and it decomposes into exactly these streams,
-each individually tunable in [`engine/config.py`](engine/config.py).
+Cash is never lumped. Click any week and it decomposes into exactly these streams.
+Every driver and key assumption is **live-tunable in the sidebar** ("Tune drivers &
+assumptions"): payment lag, weather sensitivity, materials & subcontractor outflow,
+opening cash and the covenant floor — the forecast, covenant light and audit trail
+all recompute instantly, and the toggle that produced a number is itself traceable.
+Defaults live in [`engine/config.py`](engine/config.py).
 
 ---
 
@@ -212,6 +224,12 @@ Wet quarter, week 9 liquidity dips
 `forecast.trace(week, driver)` returns every contributing record. The test
 `trace(week, driver) sums to the driver cell` asserts the trace sums **exactly** to
 the number it explains — auditability is a proven invariant, not a claim.
+
+The drill-down shows, per contribution: the **full reconciled GL line** (record id ·
+system/unified account · date · gross · source file:row), the **assumptions applied**,
+the scenario + weather toggle, and an honest **provenance** label —
+*Real GL* vs *Modeled (pipeline)* — so a controller always knows which figures come
+straight from the source data and which are the revenue-calibrated forward model.
 
 ---
 

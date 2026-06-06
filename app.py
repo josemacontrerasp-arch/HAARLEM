@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import inspect
 import os
 from dataclasses import dataclass, field
@@ -715,10 +716,48 @@ def sidebar_path_picker(label: str, suffixes: set[str], key: str, prefer: str = 
     return manual.strip() or selected
 
 
+@dataclass
+class Tuning:
+    """Live, UI-exposed multipliers so every driver and key assumption is
+    independently tunable (brief requirement). 1.0 = the modelled default."""
+    lag_mult: float = 1.0           # customer payment lag (per segment)
+    weather_mult: float = 1.0       # weather sensitivity (working-days lost)
+    materials_mult: float = 1.0     # materials outflow
+    subcontractor_mult: float = 1.0 # subcontractor outflow
+    opening_mult: float = 1.0       # opening cash
+    threshold_mult: float = 1.0     # covenant cash floor
+
+    def is_default(self) -> bool:
+        return all(abs(v - 1.0) < 1e-9 for v in (
+            self.lag_mult, self.weather_mult, self.materials_mult,
+            self.subcontractor_mult, self.opening_mult, self.threshold_mult))
+
+
+def apply_tuning(cfg: ForecastConfig, projects: List[Project], t: Tuning) -> Tuple[ForecastConfig, List[Project]]:
+    """Return tuned copies of (cfg, projects). Pure — never mutates the inputs, so
+    the audit trail recomputes cleanly and the toggle that produced a number is
+    traceable to exactly these values."""
+    if t.is_default():
+        return cfg, projects
+    cfg = copy.deepcopy(cfg)
+    cfg.payment_lag_days = {k: max(0, round(v * t.lag_mult)) for k, v in cfg.payment_lag_days.items()}
+    cfg.opening_balance = round(cfg.opening_balance * t.opening_mult, 2)
+    cfg.opening_balance_by_opco = {k: round(v * t.opening_mult, 2) for k, v in cfg.opening_balance_by_opco.items()}
+    cfg.covenant_threshold = round(cfg.covenant_threshold * t.threshold_mult, 2)
+    projects = copy.deepcopy(projects)
+    for p in projects:
+        for s in p.materials_schedule:
+            s.amount = round(s.amount * t.materials_mult, 2)
+        for s in p.subcontractor_schedule:
+            s.amount = round(s.amount * t.subcontractor_mult, 2)
+    return cfg, projects
+
+
 def build_forecast_bundle(
     transactions: List[Transaction],
     projects: List[Project],
     cfg: ForecastConfig,
+    weather_multiplier: float = 1.0,
 ) -> Tuple[Dict[str, Forecast], Dict[str, Dict[str, Forecast]], Dict[str, Dict[str, int]], List[str]]:
     forecasts: Dict[str, Forecast] = {}
     opco_forecasts: Dict[str, Dict[str, Forecast]] = {}
@@ -727,6 +766,9 @@ def build_forecast_bundle(
 
     for label, (scenario, _) in SCENARIOS.items():
         weather_shift = build_weather_shift(projects, scenario, month=cfg.anchor_monday.month)
+        if abs(weather_multiplier - 1.0) > 1e-9:
+            weather_shift = {k: round(v * weather_multiplier) for k, v in weather_shift.items()}
+            weather_shift = {k: v for k, v in weather_shift.items() if v != 0}
         weather_shifts[label] = weather_shift
         try:
             by_opco = build_all_opcos(
@@ -756,11 +798,13 @@ def build_forecast_bundle(
     return forecasts, opco_forecasts, weather_shifts, build_notes
 
 
-def load_stub_state(note: str = "") -> DashboardState:
+def load_stub_state(note: str = "", tuning: Optional[Tuning] = None) -> DashboardState:
     cfg = ForecastConfig()
     transactions, projects = make_stub(cfg)
+    tuning = tuning or Tuning()
+    cfg, projects = apply_tuning(cfg, projects, tuning)
     forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
-        transactions, projects, cfg
+        transactions, projects, cfg, weather_multiplier=tuning.weather_mult
     )
     return DashboardState(
         cfg=cfg,
@@ -775,7 +819,7 @@ def load_stub_state(note: str = "") -> DashboardState:
     )
 
 
-def load_real_state(transactions_path: str, projects_path: str) -> DashboardState:
+def load_real_state(transactions_path: str, projects_path: str, tuning: Optional[Tuning] = None) -> DashboardState:
     from engine.load import load_full_state
 
     txn_path = transactions_path.strip() or str(DEFAULT_TXN_PATH)
@@ -794,8 +838,10 @@ def load_real_state(transactions_path: str, projects_path: str) -> DashboardStat
     except Exception:
         transactions, projects, cfg, summary = _load(str(DEFAULT_TXN_PATH))
 
+    tuning = tuning or Tuning()
+    cfg, projects = apply_tuning(cfg, projects, tuning)
     forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
-        transactions, projects, cfg
+        transactions, projects, cfg, weather_multiplier=tuning.weather_mult
     )
     return DashboardState(
         cfg=cfg,
@@ -818,14 +864,16 @@ def load_dashboard_state(
     data_mode: str,
     transactions_path: str = "",
     projects_path: str = "",
+    tuning: Optional[Tuning] = None,
 ) -> DashboardState:
     if data_mode == "Demo stub data":
-        return load_stub_state()
+        return load_stub_state(tuning=tuning)
     try:
-        return load_real_state(transactions_path, projects_path)
+        return load_real_state(transactions_path, projects_path, tuning=tuning)
     except Exception as exc:
         return load_stub_state(
-            f"Real data could not be loaded, so the dashboard fell back to demo data. Reason: {exc}"
+            f"Real data could not be loaded, so the dashboard fell back to demo data. Reason: {exc}",
+            tuning=tuning,
         )
 
 
@@ -932,12 +980,31 @@ def weekly_driver_frame(forecast: Forecast) -> pd.DataFrame:
 
 
 def source_label(record_id: str, transactions_by_id: Dict[str, Transaction]) -> str:
+    # Modeled rows (pipeline) are flagged by prefix and never claim to be GL lines.
+    if record_id.startswith("sched:"):
+        return record_id.replace("sched:", "modeled schedule: ")
+    if record_id.startswith("wip:"):
+        return record_id.replace("wip:", "modeled WIP: ")
     txn = transactions_by_id.get(record_id)
     if not txn:
-        if record_id.startswith("sched:"):
-            return record_id.replace("sched:", "project schedule: ")
         return record_id
-    return f"{record_id} ({txn.source_system}, {txn.source_file}:{txn.source_row})"
+    # Real GL line: show the full audit detail, not just the id.
+    return (
+        f"{record_id} | {txn.source_system}/{txn.gl_account_unified} | "
+        f"{txn.date} | {format_eur(txn.amount_incl_vat)} | "
+        f"{txn.source_file}:{txn.source_row}"
+    )
+
+
+def trace_provenance(record_ids: List[str]) -> str:
+    """Honest label: real reconciled GL lines vs modeled pipeline rows."""
+    modeled = sum(1 for r in record_ids if r.startswith(("sched:", "wip:")))
+    real = len(record_ids) - modeled
+    if real and modeled:
+        return "Mixed (GL + modeled)"
+    if modeled:
+        return "Modeled (pipeline)"
+    return "Real GL"
 
 
 def trace_rows(
@@ -952,9 +1019,10 @@ def trace_rows(
             {
                 "driver": DRIVER_LABELS.get(item.driver, item.driver),
                 "value": round(item.value, 2),
+                "provenance": trace_provenance(item.contributing_records),
                 "assumptions": ", ".join(item.assumptions_applied) or "none",
                 "scenario": item.scenario,
-                "source_records": ", ".join(
+                "source_records": " ;  ".join(
                     source_label(record_id, transactions_by_id)
                     for record_id in item.contributing_records
                 ),
@@ -1289,12 +1357,13 @@ def render_traceability(rows: List[Dict[str, object]]) -> None:
         source_records = escape(str(row["source_records"]))
         value = escape(format_eur(float(row["value"])))
         computation = escape(str(row["computation"]))
+        provenance = escape(str(row.get("provenance", "")))
         st.markdown(
             f"""
             <div class="trace-card">
                 <div class="trace-flow">{driver} &rarr; {assumptions} &rarr; {scenario} &rarr; {source_records}</div>
                 <div class="trace-meta">
-                    <strong>Value:</strong> {value}<br/>
+                    <strong>Value:</strong> {value} &nbsp;·&nbsp; <strong>Provenance:</strong> {provenance}<br/>
                     <strong>Computation:</strong> {computation}<br/>
                     <strong>Weather:</strong> {escape(str(row["weather_shift"]))}
                 </div>
@@ -1436,12 +1505,66 @@ def render_opco_tab(
         alert_box("No explicit weather-dependent milestones are shifted in this scenario.")
 
 
+LIVE_WEATHER_OPCOS = ("andijk", "brunssum", "heeze", "winschoten")
+
+
+@st.cache_data(ttl=1800, show_spinner="Checking live weather…")
+def _live_weather(loc_items: Tuple[Tuple[str, float, float], ...], start_iso: str, end_iso: str) -> Dict[str, dict]:
+    from datetime import date as _date
+
+    from engine.weather import live_unworkable_by_location
+    locations = {n: (la, lo) for n, la, lo in loc_items}
+    # roofing=False -> raw thresholded workdays (a sensible "days unworkable" count
+    # that never exceeds the window). The 2x roofing uplift is a slip-model factor,
+    # not a literal day count, so it stays in the scenario engine.
+    return live_unworkable_by_location(
+        locations, _date.fromisoformat(start_iso), _date.fromisoformat(end_iso), roofing=False)
+
+
+def render_live_weather() -> None:
+    from datetime import date as _date, timedelta as _td
+
+    panel_title("Live weather — next 14 days (Open-Meteo, per opco)")
+    st.caption(
+        "Real forecast per operating-company location, scored with the roofing "
+        "unworkable-day thresholds (CAO/UAV §42). This is the near-term live signal "
+        "for schedule risk; the 13-week scenario engine uses KNMI climatology "
+        "(real forecasts don't reach 13 weeks out)."
+    )
+    locs = {k: v for k, v in COMPANY_LOCATIONS.items() if k in LIVE_WEATHER_OPCOS}
+    start = _date.today()
+    end = start + _td(days=14)
+    try:
+        data = _live_weather(
+            tuple((n, la, lo) for n, (la, lo) in locs.items()),
+            start.isoformat(), end.isoformat(),
+        )
+    except Exception as exc:
+        alert_box(f"Live weather unavailable ({exc}). Scenario engine still runs on KNMI climatology.", tone="warning")
+        return
+    if not data:
+        alert_box("Live weather unavailable right now (offline?). Scenario engine still runs on KNMI climatology.", tone="warning")
+        return
+    rows = [
+        {
+            "opco": name.title(),
+            "unworkable days (next 14)": d["unworkable_days"],
+            "rain (mm)": d["rain_mm"],
+            "frost days": d["frost_days"],
+        }
+        for name, d in sorted(data.items())
+    ]
+    st.dataframe(rows, width="stretch", hide_index=True)
+
+
 def render_project_lead_tab(
     projects: List[Project],
     transactions: List[Transaction],
     forecast: Forecast,
     weather_shift: Dict[str, int],
 ) -> None:
+    render_live_weather()
+
     if not projects:
         alert_box("No project records are loaded. Add project data to populate this view.")
         return
@@ -1652,7 +1775,27 @@ def main() -> None:
                 prefer="Portfolio",
             )
 
-    state = load_dashboard_state(data_mode, transactions_path, projects_path)
+    st.sidebar.markdown('<div class="side-section">Driver &amp; assumption tuning</div>', unsafe_allow_html=True)
+    with st.sidebar.expander("Tune drivers & assumptions"):
+        st.caption(
+            "Every driver and key assumption is independently tunable. The forecast, "
+            "covenant light and audit trail all recompute live (1.0 = modelled default)."
+        )
+        lag_mult = st.slider("Customer payment lag ×", 0.5, 2.0, 1.0, 0.05,
+                             help="Scales days from invoice to cash, per segment.")
+        weather_mult = st.slider("Weather sensitivity ×", 0.0, 2.0, 1.0, 0.1,
+                                 help="Scales the working-days lost to rain/frost.")
+        materials_mult = st.slider("Materials outflow ×", 0.5, 1.5, 1.0, 0.05,
+                                   help="Scales committed materials payments.")
+        sub_mult = st.slider("Subcontractor outflow ×", 0.5, 1.5, 1.0, 0.05,
+                             help="Scales milestone-tied subcontractor payments.")
+        opening_mult = st.slider("Opening cash ×", 0.5, 1.5, 1.0, 0.05,
+                                 help="Scales the assumed opening bank position.")
+        threshold_mult = st.slider("Covenant cash floor ×", 0.5, 2.0, 1.0, 0.05,
+                                   help="Scales the minimum-liquidity covenant threshold.")
+    tuning = Tuning(lag_mult, weather_mult, materials_mult, sub_mult, opening_mult, threshold_mult)
+
+    state = load_dashboard_state(data_mode, transactions_path, projects_path, tuning)
     transactions = state.transactions
     projects = state.projects
     forecasts = state.forecasts

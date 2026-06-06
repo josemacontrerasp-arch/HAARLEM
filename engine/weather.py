@@ -148,3 +148,28 @@ def summarise_weather(days: List[DailyWeather], frost_threshold: float = FROST_S
     rain = sum(d.precip_mm for d in days)
     frost = sum(1 for d in days if d.temp_min <= frost_threshold)
     return rain, frost
+
+
+def live_unworkable_by_location(locations: Dict[str, tuple], start: date, end: date,
+                                roofing: bool = True, timeout: float = 8.0) -> Dict[str, dict]:
+    """REAL near-term signal: fetch each opco's Open-Meteo forecast (keyless) and
+    score it with the roofing unworkable-day thresholds. Open-Meteo's forecast
+    reaches ~16 days, so this informs the near term; the 13-week scenario engine
+    runs on KNMI climatology. Returns {name: {unworkable_days, rain_mm, frost_days,
+    days}}; locations that fail to fetch are simply omitted (graceful)."""
+    out: Dict[str, dict] = {}
+    for name, (lat, lon) in locations.items():
+        try:
+            daily = fetch_daily(lat, lon, start, end, archive=False, timeout=timeout)
+        except Exception:
+            continue
+        if not daily:
+            continue
+        rain, frost = summarise_weather(daily)
+        out[name] = {
+            "unworkable_days": unworkable_days_from_daily(daily, roofing=roofing),
+            "rain_mm": round(rain, 1),
+            "frost_days": frost,
+            "days": len(daily),
+        }
+    return out
