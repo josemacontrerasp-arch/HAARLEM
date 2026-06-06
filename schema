@@ -1,0 +1,52 @@
+Unified Schema — Contract v1
+This is the single agreed format that all four accounting systems (Gilde, Yuki, Exact, Snelstart) are translated into.
+Every adapter (ingest_gilde, ingest_yuki, ingest_exact, ingest_snelstart) must take its system's native export and return rows that obey exactly this schema. Nothing downstream (driver model, scenario engine, role views) knows anything about the native formats — it only ever sees this table.
+
+Frozen once, built against by all three. Once this is agreed, Person B and Person C build against it using synthetic rows while Person A reconciles the real data underneath. Do not change column names or meanings without telling the whole team.
+
+
+The grain
+One row = one financial event line, at transaction grain. An invoice with three lines is three rows. A bank payment is one row. WIP and open commitments are also rows (see status).
+Accrual events (invoice issued, work recognised) and cash events (money moved / predicted to move) are both represented, distinguished by status. Never collapse them into a single "transaction" — the forecast depends on knowing what has not yet happened.
+
+Columns
+#ColumnTypeRequiredDefinition1record_idstringyesGlobally unique id for this row. Suggested: {source_system}-{source_file}-{source_row}.2source_systemenumyesWhich accounting system. One of: gilde, yuki, exact, snelstart.3source_filestringyesFilename the row was read from. Lineage — never drop.4source_rowintegeryesRow number within that file. Lineage — never drop.5opcostringyesOperating company this event belongs to.6datedate (ISO YYYY-MM-DD)yesThe event date. For cash events: when money moved / is predicted to move. For accruals: the document date.7gl_account_nativestringyesThe GL account exactly as the source system wrote it. Kept for the audit trail.8gl_account_unifiedstringyesThe shared account after applying the chart-of-accounts mapping file. UNMAPPED if not found in the mapping (never drop the row).9driver_typeenumyesWhich cash driver this belongs to. One of: materials, subcontractor, milestone_billing, customer_payment, weather, vat_remittance, other.10amount_excl_vatdecimal(2)yesNet amount, signed. Cash in = positive, cash out = negative.11vat_amountdecimal(2)yesVAT (BTW) portion, signed same direction as the net. 0.00 if none. Never net this away.12amount_incl_vatdecimal(2)yesGross = amount_excl_vat + vat_amount. This is the amount that actually moves through the bank.13currencystring(3)yesISO currency code. Expect EUR.14counterpartystringnoWho was paid / who paid. Nullable if unknown.15project_idstringnoLinks to the project & WIP data. Nullable for non-project events (e.g. overhead).16statusenumyesLifecycle stage — see below. One of: actual, open_ar, open_ap, wip.17descriptionstringnoOriginal free-text line description. Useful for the audit trail and driver classification.
+
+Critical field rules (the ones that silently corrupt everything)
+Sign convention — pick one, enforce in every adapter
+Cash in = positive, cash out = negative. A customer payment received is positive. A materials payment is negative. If a source system uses separate debit/credit columns, the adapter must resolve them into one signed number obeying this rule. Getting this wrong makes the cash line garbage and it won't be obvious until the demo.
+Decimals — Dutch convention in, float out
+Source exports use comma decimals and dot thousands: 1.234,56 means 1234.56. Parse in each adapter (e.g. pandas decimal=',', thousands='.'). The unified table stores plain numbers.
+VAT — kept separate, on purpose
+Cash moves on amount_incl_vat (gross). But VAT is a pass-through remitted to the Belastingdienst quarterly — its own scheduled outflow (driver_type = vat_remittance). Keeping VAT as its own column lets Person B model both the gross receipt and the periodic BTW remittance. Stripping to net hides a real cash event.
+Unmapped GL accounts — flag, don't drop
+If a native account isn't in the mapping file, set gl_account_unified = UNMAPPED and keep the row. This is also the "new GL account appears, model doesn't break" edge-case story for the Technical Depth score.
+
+The status lifecycle (what makes forecasting possible)
+A 13-week forecast cares less about cash that already moved and more about cash about to move. status encodes that:
+ValueMeaningForecast roleactualCash already moved (bank lines).Historical; anchors the model.open_arInvoice issued, not yet paid.Future inflow. Predicted cash date = date + payment lag for that customer.open_apMaterials PO / subcontractor commitment, not yet paid.Future outflow.wipWork done, not yet invoiced.Future inflow signal — becomes a milestone invoice (open_ar) later.
+Person B turns open_ar + a payment-lag assumption into a forecasted inflow — but only if the adapter preserved that the invoice is unpaid and when it was issued.
+
+Driver classification cheatsheet
+Mostly a lookup from gl_account_unified (+ counterparty/description overrides):
+
+materials — roofing material purchases (GL-driven, usually open_ap ahead of execution).
+subcontractor — subcontractor costs tied to project progress (GL-driven).
+milestone_billing — invoiceable milestones per project (comes from project/WIP data, joined on project_id).
+customer_payment — actual receipts from customers (actual); the lag is derived, not a row type.
+vat_remittance — quarterly BTW payment to the tax authority.
+weather — reserved; weather doesn't create rows, it shifts timing of others (Person B's engine).
+other — default bucket. Don't force-fit; leave it here rather than guess.
+
+
+Example rows
+record_id          source_system source_file        source_row opco       date        gl_native gl_unified driver_type        amount_excl_vat vat_amount amount_incl_vat currency counterparty   project_id status   description
+exact-exp1.csv-204 exact         exact_export.csv   204        OpcoNoord  2025-05-12  7000      4010       materials          -5000.00        -1050.00   -6050.00        EUR      DakStaal BV    PRJ-118    open_ap  Levering EPDM dakbedekking
+yuki-exp2.csv-88   yuki          yuki_export.csv    88         OpcoZuid   2025-05-20  8000      1300       milestone_billing  12000.00        2520.00    14520.00        EUR      Gemeente X     PRJ-204    open_ar  Termijn 2 - dakrenovatie
+gilde-bank.csv-15  gilde         gilde_bank.csv     15         OpcoNoord  2025-05-22  1100      1100       customer_payment   8000.00         1680.00    9680.00         EUR      Bouwbedrijf Y  PRJ-091    actual   Ontvangst factuur 2025-0042
+(GL numbers, accounts and names above are illustrative — replace with real mapped values.)
+
+Output format
+One table, written as parquet and/or a duckdb/sqlite table so Person B can query it with clean SQL. Ship alongside a small reconciliation report per source file: rows in / rows out, sum of amount_incl_vat ties to raw export, count of UNMAPPED accounts, count of null dates.
+
+Schema owner: Person A. Changes require sign-off from B and C before merging.
