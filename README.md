@@ -16,7 +16,7 @@ to the board — not a dashboard they have to take on faith.
 | Criterion | Where we earn it |
 |---|---|
 | **Impact & Relevance** | A defensible forecast a CFO would open Monday; the materials-vs-billing squeeze; liquidity-vs-leverage distinction |
-| **Technical Depth** | 3 systems reconciled into one schema; survives UNMAPPED / corrections / slips; per-opco = consolidated, proven by test |
+| **Technical Depth** | 4 systems reconciled into one schema; survives UNMAPPED / corrections / slips; per-opco = consolidated, proven by test |
 | **Auditability** | Every cell → driver → assumption → toggle → source line; one source of truth feeds all four roles |
 | **Innovation** | Weather as a causal delay operator (not a multiplier); scenario-driven + statistically calibrated; the squeeze made visible |
 
@@ -98,17 +98,19 @@ A clean pipeline, each stage swappable:
  │ Gilde      │   │ schema   → one canonical transaction record │   │ CFO       │
  │ Yuki       │──▶│ load     → reconcile + project pipeline      │──▶│ Opco MD   │
  │ Snelstart  │   │ drivers  → 5 streams, week by week           │   │ Proj Lead │
- │ (Exact*)   │   │ weather  → scenario delay operator           │   │ PE Board  │
+ │ Exact      │   │ weather  → scenario delay operator           │   │ PE Board  │
  └────────────┘   │ covenant → headroom + traffic light          │   └───────────┘
    GL mapping     │ learn    → 2 calibrated coefficients          │   one object,
-   (controller-   │ trace()  → every cell → source journal line   │   all views
-    approved)     └──────────────────────────────────────────────┘
+   (LLM-assisted, │ trace()  → every cell → source journal line   │   all views
+    controller-   └──────────────────────────────────────────────┘
+    approved)
 ```
 
 | File | Responsibility |
 |---|---|
-| `ingest_gilde.py`, `ingest_yuki.py`, `ingest_snelstart.py`, `ingest_all.py` | Per-system adapters → one canonical schema |
-| `data/gl_mapping.csv` | Chart-of-accounts mapping (controller-approvable rules) |
+| `ingest_gilde.py`, `ingest_yuki.py`, `ingest_snelstart.py`, `ingest_exact.py`, `ingest_all.py` | Per-system adapters (all 4 systems) → one canonical schema |
+| `llm_gl_mapping.py` | LLM-assisted GL mapping: model suggests account + driver → controller approves/rejects → logged |
+| `data/gl_mapping.csv` | Chart-of-accounts mapping (controller-approved rules) |
 | `engine/schema.py` | The canonical contract: transaction, project/milestone, **trace metadata** |
 | `engine/load.py` | Load reconciled data, normalise opcos, build the real-data state |
 | `engine/forecast.py` | The spine: 13-week forecast, drivers, `trace()`, per-opco + consolidated |
@@ -135,7 +137,7 @@ streamlit run app.py        # the dashboard (four role views, scenario toggle, d
 
 # Optional
 python run_demo.py          # headless: forecast + covenant + audit-trail walkthrough
-python tests.py             # 14 engine invariants (traceability, reconciliation, covenant…)
+python tests.py             # 18 engine invariants (traceability, reconciliation, covenant, LLM mapping…)
 ```
 
 **No raw data?** The app falls back to the built-in stub dataset automatically — all views and drill-downs work, on synthetic-but-realistic numbers.
