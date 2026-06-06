@@ -95,25 +95,12 @@ def weather_exposed_projects(projects: List[Project]) -> List[Project]:
     return [project for project in projects if project.weather_exposure > 0]
 
 
-def weather_shift_days(project: Project, scenario: str) -> int:
-    exposure = max(0.0, min(float(project.weather_exposure), 1.0))
-    if scenario == "wet-quarter":
-        return max(1, round(35 * exposure))
-    if scenario == "dry-quarter":
-        return min(-1, -round(14 * exposure))
-    return 0
-
-
-def build_weather_shift(projects: List[Project], scenario: str) -> Dict[str, int]:
-    if scenario == "base":
-        return {}
-
-    weather_shift: Dict[str, int] = {}
-    for project in weather_exposed_projects(projects):
-        days = weather_shift_days(project, scenario)
-        if days != 0:
-            weather_shift[project.project_id] = days
-    return weather_shift
+def build_weather_shift(projects: List[Project], scenario: str, month: int = 1) -> Dict[str, int]:
+    # Validated threshold model (engine/weather.py): KNMI per-quarter unworkable
+    # days x roofing uplift x exposure, anchored to the CAO Onwerkbaar weer rules.
+    # `month` is the calendar month the horizon starts in (drives the quarter).
+    from engine.weather import scenario_shift
+    return scenario_shift(projects, scenario, month=month)
 
 
 def discover_files(suffixes: set[str]) -> List[str]:
@@ -176,7 +163,7 @@ def build_forecast_bundle(
     build_notes: List[str] = []
 
     for label, (scenario, _) in SCENARIOS.items():
-        weather_shift = build_weather_shift(projects, scenario)
+        weather_shift = build_weather_shift(projects, scenario, month=cfg.anchor_monday.month)
         weather_shifts[label] = weather_shift
         try:
             by_opco = build_all_opcos(

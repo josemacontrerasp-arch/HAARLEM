@@ -168,8 +168,9 @@ Rather than invent precise numbers, we use **explicit industry-standard assumpti
 | EBITDA | revenue × **10%** | Typical roofing margin (~8–15%); only one opco had costs, at an implausible 66% → not used |
 | Net debt | **3.0×** EBITDA | Typical PE entry leverage |
 | Covenant cap | **3.5×** | Typical mid-market covenant |
-| Opening cash | ~1 month of revenue | No bank export was provided |
+| Opening cash | ~1.75 months of revenue | No bank export was provided |
 | Project pipeline | calibrated to each opco's real revenue | No WIP file was provided (the brief allows *realistic* data) |
+| Weather impact | threshold "unworkable-day" model, KNMI-calibrated per quarter | Anchored to Dutch **CAO Onwerkbaar weer / UAV 2012** + **KNMI** norms — see [`altis_weather_model_validation.md`](altis_weather_model_validation.md) |
 
 **Liquidity vs leverage (a real finding):** a quarterly TTM leverage covenant
 barely reacts to 13-week cash timing, so the weather cascade is surfaced on the

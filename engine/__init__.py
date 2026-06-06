@@ -32,7 +32,13 @@ from .ebitda import (
     derive_covenant_inputs,
     portfolio_ebitda_assumed,
 )
-from .weather import days_lost_for_projects, scenario_shift, summarise_weather
+from .weather import (
+    expected_unworkable_days,
+    fetch_daily,
+    scenario_shift,
+    summarise_weather,
+    unworkable_days_from_daily,
+)
 from .schema import (
     Milestone,
     Project,
@@ -54,7 +60,8 @@ __all__ = [
     "estimate_weather_coeffs", "predict_days_lost",
     "load_state", "load_full_state", "build_pipeline",
     "suggest_anchor", "opening_balance_from_actuals",
-    "days_lost_for_projects", "scenario_shift", "summarise_weather",
+    "scenario_shift", "summarise_weather", "expected_unworkable_days",
+    "fetch_daily", "unworkable_days_from_daily",
     "OpcoEbitda", "PortfolioEbitda", "compute_portfolio_ebitda",
     "derive_covenant_inputs", "portfolio_ebitda_assumed",
 ]
