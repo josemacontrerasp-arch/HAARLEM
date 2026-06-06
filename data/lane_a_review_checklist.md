@@ -65,9 +65,9 @@ Spot check: pick one known revenue invoice from each source system and verify th
 
 | System | Invoice / Entry | Expected Sign | Actual in transactions.csv | Confirmed? |
 |---|---|---|---|---|
-| Gilde (Heeze) | _________________ | Positive | _________________ | ☐ |
-| Yuki (Peter Ummels) | _________________ | Positive | _________________ | ☐ |
-| Snelstart (Winschoten) | _________________ | Positive | _________________ | ☐ |
+| Gilde (Heeze) | GB 8000 jan-dec 23, row 2, 2023-01-11, Credit €26.15 | Positive | +26.15 | ☑ |
+| Yuki (Peter Ummels) | 82604-2023, row 2, 2023-12-19, Credit €391,500 | Positive | +391500.0 (VAT=0, reverse charge) | ☑ |
+| Snelstart (Winschoten) | Dataset 2 2023, Bkst.nr. 23060005, Credit €407.16 | Positive | +407.16 (paired with debit line 23060006, net=0, correct double-entry) | ☑ |
 
 ---
 
