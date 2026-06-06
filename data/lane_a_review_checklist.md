@@ -12,17 +12,17 @@ For each mapping rule, confirm the `driver_type` is correct.
 
 | Rule ID | Native Account | Description | Driver Assigned | Confirmed? | Notes |
 |---|---|---|---|---|---|
-| GILDE-8000 | 8000 | Omzet hoog (21% BTW) | milestone_billing | ☐ | |
-| GILDE-8001 | 8001 | Omzet verlegd (reverse charge) | milestone_billing | ☐ | |
-| GILDE-8002 | 8002 | Omzet overig | milestone_billing | ☐ | |
-| YUKI-8002 | 8002 | Omzet belast 9% | milestone_billing | ☐ | |
-| YUKI-8004 | 8004 | Omzet 0% / exempt | milestone_billing | ☐ | |
-| YUKI-8005 | 8005 | Omzet verlegd (Peter Ummels) | milestone_billing | ☐ | |
-| DS2-VERKOOP | 006 - Verkoop | Snelstart sales journal | milestone_billing | ☐ | |
+| GILDE-8000 | 8000 | Omzet hoog (21% BTW) | milestone_billing | ☑ | Verkoopboek 1 entries confirmed as invoiced sales lines |
+| GILDE-8001 | 8001 | Omzet verlegd (reverse charge) | milestone_billing | ☑ | Verkoopboek 1 entries confirmed as invoiced sales lines |
+| GILDE-8002 | 8002 | Omzet overig | milestone_billing | ☑ | Single entry confirmed as sales (Omzet laag) |
+| YUKI-8002 | 8002 | Omzet belast 9% | milestone_billing | ☑ | 80 - Verkoop journal, confirmed sales entries |
+| YUKI-8004 | 8004 | Omzet 0% / exempt | milestone_billing | ☑ | 80 - Verkoop journal, large project amounts confirmed |
+| YUKI-8005 | 8005 | Omzet verlegd (Peter Ummels) | milestone_billing | ☑ | 80 - Verkoop journal, large milestone invoices confirmed (€391K, €236K) |
+| DS2-VERKOOP | 006 - Verkoop | Snelstart sales journal | milestone_billing | ☑ | Paired debit/credit entries with VAT confirmed as sales |
 | DS2-MMEM-WIP | 008 - MMEM (debit) | WIP accrual | milestone_billing / wip | ☑ | Corrected after cross-year amount analysis — debits open WIP accruals, credits reverse them |
 | DS2-MMEM-ACCRUAL | 008 - MMEM (credit) | Accrual reversal | other / actual | ☑ | Same analysis — credit side reverses the accrual once real invoice is posted |
-| DS2-KAS | 001 - Kas | Cash journal | customer_payment | ☐ | |
-| DS2-GILDE | 60 - Verkoopboek Gilde | Gilde sales via Snelstart | milestone_billing | ☐ | |
+| DS2-KAS | 001 - Kas | Cash journal | customer_payment | ☑ | Cash receipts with VAT confirmed |
+| DS2-GILDE | 60 - Verkoopboek Gilde | Gilde sales via Snelstart | milestone_billing | ☑ | Sales journal entries with VAT confirmed |
 
 ### 1b. MMEM split rule
 The LLM derived this rule from patterns in the data:
