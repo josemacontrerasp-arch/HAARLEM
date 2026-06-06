@@ -25,6 +25,10 @@ class ForecastConfig:
     # from the vat_amount column (engine/vat.py).
     compute_vat: bool = True
 
+    # No bank/cash export was provided, so opening cash is assumed as this many
+    # months of revenue (documented assumption used by load_full_state).
+    opening_cash_months: float = 1.0
+
     # Payment lag in DAYS by customer_segment. open_ar settles at date + lag.
     # GAP: segment isn't in the unified table yet -> resolved via counterparty_map.
     # These are exactly the coefficients the "legit ML" step can estimate.

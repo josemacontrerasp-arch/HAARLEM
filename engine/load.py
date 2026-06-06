@@ -30,6 +30,15 @@ from .schema import (
 
 _TXN_FIELDS = {f.name for f in fields(Transaction)}
 
+# Lane A labels opcos generically; map to the real Altis operating companies so
+# the reconciled data lines up with the P&L and the project pipeline.
+OPCO_NORMALIZE = {
+    "OpcoUmmels": "Brunssum",
+    "OpcoNoord": "Andijk",
+    "OpcoWinschoten": "Winschoten",
+    "CompanyE": "Heeze",
+}
+
 
 def _to_date(v) -> date:
     if isinstance(v, date) and not isinstance(v, datetime):
@@ -56,6 +65,8 @@ def _to_float(v) -> float:
 
 def _row_to_txn(d: Dict) -> Transaction:
     clean = {k: d[k] for k in d if k in _TXN_FIELDS}
+    if clean.get("opco") in OPCO_NORMALIZE:
+        clean["opco"] = OPCO_NORMALIZE[clean["opco"]]
     clean["date"] = _to_date(clean["date"])
     clean["source_row"] = int(clean.get("source_row") or 0)
     for money in ("amount_excl_vat", "vat_amount", "amount_incl_vat"):
@@ -158,6 +169,45 @@ def load_state(txn_path: str, projects_path: Optional[str] = None, cfg=None):
         if abs(real_cash) > 1.0:
             cfg.opening_balance = real_cash
     return txns, projects, cfg, summary
+
+
+def load_full_state(txn_path: str, pl_path: str, cfg=None):
+    """The complete real-data demo state in one call:
+      - real reconciled transactions (the audit-trail foundation)
+      - a revenue-calibrated forward project & WIP pipeline (so the forecast has
+        outflows + a weather cascade)
+      - covenant inputs (EBITDA/debt) derived from the P&L on documented assumptions
+    Returns (transactions, projects, cfg, summary).
+    """
+    from .config import ForecastConfig
+    from .ebitda import derive_covenant_inputs
+    from .pipeline import build_pipeline
+
+    from .ebitda import portfolio_ebitda_assumed
+    from .pipeline import OPCO_DISPLAY
+
+    cfg = cfg or ForecastConfig()
+    txns, summary = load_transactions(txn_path)
+    anchor = suggest_anchor(txns)
+    if anchor:
+        cfg.anchor_monday = anchor
+    info = derive_covenant_inputs(pl_path, cfg)
+    projects, wip = build_pipeline(pl_path, cfg)
+
+    # No bank/cash export exists, so we can't read a real opening balance. Assume
+    # operating cash ~= cfg.opening_cash_months of revenue (documented), split per
+    # opco by revenue share so per-opco views start from a realistic position.
+    _, ttm_rev, per_opco = portfolio_ebitda_assumed(pl_path, cfg.ebitda_assumed_margin)
+    cfg.opening_balance = round(ttm_rev / 12.0 * cfg.opening_cash_months, 2)
+    if ttm_rev > 0:
+        cfg.opening_balance_by_opco = {
+            OPCO_DISPLAY.get(k, k): round(cfg.opening_balance * v / ttm_rev, 2)
+            for k, v in per_opco.items()}
+
+    summary["pipeline_projects"] = len(projects)
+    summary["pipeline_wip_rows"] = len(wip)
+    summary["opening_balance"] = cfg.opening_balance
+    return txns + wip, projects, cfg, summary
 
 
 def load_projects(path: Optional[str]) -> List[Project]:
