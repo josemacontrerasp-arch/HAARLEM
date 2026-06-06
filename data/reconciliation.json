@@ -5,12 +5,13 @@
   "duplicate_record_ids": 0,
   "schema_violations": 0,
   "status_counts": {
-    "actual": 36565,
+    "actual": 36549,
+    "wip": 16,
     "open_ar": 329
   },
   "driver_counts": {
-    "milestone_billing": 36859,
-    "other": 28,
+    "milestone_billing": 36848,
+    "other": 39,
     "customer_payment": 7
   },
   "per_file": [

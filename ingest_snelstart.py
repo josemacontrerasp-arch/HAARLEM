@@ -20,8 +20,8 @@ VAT: Btw-bedrag is already the VAT portion (signed, same direction as the
      - 001 - Kas: 0% (cash movements, VAT already settled)
 
 MMEM routing (per gl_mapping.csv):
-   Credit mid-period  → driver=milestone_billing, status=actual (WIP recognition)
-   Debit OR Dec-31    → driver=other,             status=actual (accrual reversal)
+   Debit  → driver=milestone_billing, status=wip    (WIP accrual: revenue recognised, not yet invoiced)
+   Credit → driver=other,             status=actual  (accrual reversal: real invoice has been posted)
 
 Company E invoices: no VAT breakdown available → treat as 21% gross.
 """
@@ -106,14 +106,16 @@ def _ingest_gl_sheets() -> Tuple[List[Transaction], List[Dict]]:
             credit = _to_float(vals[idx["Credit"]])
             gross = credit - debit
 
-            # MMEM: override driver/status based on direction + date
+            # MMEM: debit = WIP accrual (revenue recognised, not yet invoiced)
+            #        credit = accrual reversal when real invoice is posted
             datum_val = vals[idx["Datum"]]
             if dagboek == "008 - MMEM":
-                is_credit = credit > 0
-                ts = pd.Timestamp(datum_val)
-                is_yearend = ts.month == 12 and ts.day == 31
-                driver_type = "milestone_billing" if (is_credit and not is_yearend) else "other"
-                status = "actual"
+                if debit > 0:
+                    driver_type = "milestone_billing"
+                    status = "wip"       # forward-looking: will become an invoice
+                else:
+                    driver_type = "other"
+                    status = "actual"    # reversal of prior accrual, already settled
             else:
                 status = "actual"
 
