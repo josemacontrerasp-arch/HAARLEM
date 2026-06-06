@@ -1111,7 +1111,7 @@ def project_map_rows(projects: List[Project], weather_shift: Dict[str, int]) -> 
                 "weather_exposure": project.weather_exposure,
                 "shift": shift,
                 "scenario_impact": format_days(shift) if shift else "No scenario shift",
-                "color": risk_color(risk),
+                "color": risk_color(risk),  # hex string, valid MapLibre circle-color
                 "marker_zoom_out": zoom_out,
                 "marker_mid": zoom_mid,
                 "marker_zoom_in": zoom_in,
@@ -1456,61 +1456,69 @@ def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -
         }});
         map.addControl(new maplibregl.NavigationControl({{ showCompass: false }}), "top-right");
 
-        const radiusByZoom = [
-          "interpolate", ["linear"], ["zoom"],
-          4.5, ["get", "marker_zoom_out"],
-          7, ["get", "marker_mid"],
-          11, ["get", "marker_zoom_in"],
-          13, 5
-        ];
-        const selectedRadiusByZoom = [
-          "interpolate", ["linear"], ["zoom"],
-          4.5, ["get", "marker_select_zoom_out"],
-          7, ["get", "marker_select_mid"],
-          11, ["get", "marker_select_zoom_in"],
-          13, 8
-        ];
+        // Render project dots as DOM markers instead of a GeoJSON circle layer.
+        // MapLibre's worker-driven source tiling never finishes loading inside
+        // Streamlit's sandboxed srcdoc iframe (isSourceLoaded stays false, so a
+        // circle layer renders nothing). DOM markers are positioned synchronously
+        // via map.project() and don't depend on that pipeline, so they always show.
+        function radiusForZoom(props, z) {{
+          const stops = [[4.5, props.marker_zoom_out], [7, props.marker_mid], [11, props.marker_zoom_in], [13, 5]];
+          if (z <= stops[0][0]) return stops[0][1];
+          if (z >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
+          for (let i = 0; i < stops.length - 1; i++) {{
+            const z0 = stops[i][0], r0 = stops[i][1], z1 = stops[i + 1][0], r1 = stops[i + 1][1];
+            if (z >= z0 && z <= z1) {{ const t = (z - z0) / (z1 - z0); return r0 + (r1 - r0) * t; }}
+          }}
+          return stops[stops.length - 1][1];
+        }}
 
-        map.on("load", () => {{
-          map.addSource("projects", {{ type: "geojson", data: geojson }});
-          map.addLayer({{
-            id: "projects",
-            type: "circle",
-            source: "projects",
-            paint: {{
-              "circle-radius": radiusByZoom,
-              "circle-color": ["get", "color"],
-              "circle-opacity": 0.88,
-              "circle-stroke-color": "{theme["card"]}",
-              "circle-stroke-width": 2
-            }}
-          }});
-          map.addLayer({{
-            id: "project-selected",
-            type: "circle",
-            source: "projects",
-            filter: ["==", ["get", "project_id"], ""],
-            paint: {{
-              "circle-radius": selectedRadiusByZoom,
-              "circle-color": ["get", "color"],
-              "circle-opacity": 0.18,
-              "circle-stroke-color": "{BRAND_NAVY if st.session_state.get("theme_mode") != "Dark Mode" else "#FFFFFF"}",
-              "circle-stroke-width": 4
-            }}
-          }});
+        let selectedId = null;
+        const markers = [];
 
-          map.on("mouseenter", "projects", () => map.getCanvas().style.cursor = "pointer");
-          map.on("mouseleave", "projects", () => map.getCanvas().style.cursor = "");
-          map.on("click", "projects", (event) => {{
-            const feature = event.features[0];
-            const p = feature.properties;
-            map.setFilter("project-selected", ["==", ["get", "project_id"], p.project_id]);
+        function applySelection() {{
+          markers.forEach(m => {{
+            const on = m.props.project_id === selectedId;
+            m.el.style.outline = on ? "4px solid {BRAND_NAVY if st.session_state.get("theme_mode") != "Dark Mode" else "#FFFFFF"}" : "none";
+            m.el.style.outlineOffset = "2px";
+          }});
+        }}
+
+        function applySizes() {{
+          const z = map.getZoom();
+          markers.forEach(m => {{
+            const d = Math.max(8, radiusForZoom(m.props, z) * 2);
+            m.el.style.width = d + "px";
+            m.el.style.height = d + "px";
+          }});
+        }}
+
+        geojson.features.forEach(feat => {{
+          const p = feat.properties;
+          const el = document.createElement("div");
+          el.style.background = p.color;
+          el.style.borderRadius = "999px";
+          el.style.border = "2px solid {theme["card"]}";
+          el.style.boxShadow = "0 1px 5px rgba(0, 0, 0, 0.35)";
+          el.style.boxSizing = "border-box";
+          el.style.cursor = "pointer";
+          el.addEventListener("click", ev => {{
+            ev.stopPropagation();
+            selectedId = p.project_id;
+            applySelection();
             new maplibregl.Popup({{ closeButton: true, closeOnClick: true, offset: 12 }})
-              .setLngLat(feature.geometry.coordinates)
+              .setLngLat(feat.geometry.coordinates)
               .setHTML(popupHtml(p))
               .addTo(map);
           }});
+          const marker = new maplibregl.Marker({{ element: el, anchor: "center" }})
+            .setLngLat(feat.geometry.coordinates)
+            .addTo(map);
+          markers.push({{ marker: marker, el: el, props: p }});
         }});
+
+        applySizes();
+        applySelection();
+        map.on("zoom", applySizes);
       </script>
     </body>
     </html>
