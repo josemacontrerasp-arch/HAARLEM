@@ -53,6 +53,7 @@ VAT_RATES: Dict[str, float] = {
 }
 
 _MAPPING: Dict[str, Tuple[str, str]] = {}  # native -> (unified, driver_type)
+_DEBTOR: Dict[int, Dict[str, str]] = {}   # trek_code -> {company_name, customer_segment}
 
 
 def _load_mapping(mapping_path: str = "data/gl_mapping.csv") -> None:
@@ -64,6 +65,17 @@ def _load_mapping(mapping_path: str = "data/gl_mapping.csv") -> None:
             str(row["gl_account_unified"]).strip(),
             str(row["driver_type"]).strip(),
         )
+
+
+def _load_debtor_lookup(lookup_path: str = "data/debtor_lookup.csv") -> None:
+    global _DEBTOR
+    if not os.path.exists(lookup_path):
+        return
+    df = pd.read_csv(lookup_path, dtype={"trek_code": int})
+    for _, row in df.iterrows():
+        name = str(row["company_name"]).strip() if pd.notna(row["company_name"]) and str(row["company_name"]).strip() else None
+        seg = str(row["customer_segment"]).strip() if pd.notna(row["customer_segment"]) and str(row["customer_segment"]).strip() else None
+        _DEBTOR[int(row["trek_code"])] = {"company_name": name, "customer_segment": seg}
 
 
 def _to_float(v) -> float:
@@ -126,6 +138,11 @@ def _parse_file(path: str) -> Tuple[List[Transaction], Dict]:
 
         record_id = f"gilde-{re.sub(r'[^a-z0-9]', '', fname.lower())}-{source_row}"
 
+        trek_code = int(float(row.Trek)) if pd.notna(row.Trek) else None
+        debtor = _DEBTOR.get(trek_code, {}) if trek_code is not None else {}
+        counterparty = debtor.get("company_name") or (str(trek_code) if trek_code else None)
+        segment = debtor.get("customer_segment")
+
         t = Transaction(
             record_id=record_id,
             source_system=SOURCE_SYSTEM,
@@ -140,7 +157,8 @@ def _parse_file(path: str) -> Tuple[List[Transaction], Dict]:
             vat_amount=round(vat, 2),
             amount_incl_vat=round(gross, 2),
             currency="EUR",
-            counterparty=str(row.Trek) if pd.notna(row.Trek) else None,
+            counterparty=counterparty,
+            counterparty_segment=segment,
             project_id=None,
             status="actual",
             description=str(row.Boekingstekst) if pd.notna(row.Boekingstekst) else None,
@@ -162,8 +180,10 @@ def _parse_file(path: str) -> Tuple[List[Transaction], Dict]:
 def ingest_gilde(
     data_dir: str = DATA_DIR,
     mapping_path: str = "data/gl_mapping.csv",
+    debtor_lookup_path: str = "data/debtor_lookup.csv",
 ) -> Tuple[List[Transaction], List[Dict]]:
     _load_mapping(mapping_path)
+    _load_debtor_lookup(debtor_lookup_path)
     all_txns: List[Transaction] = []
     summaries: List[Dict] = []
 

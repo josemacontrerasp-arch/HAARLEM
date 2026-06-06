@@ -1,0 +1,218 @@
+{
+  "total_rows": 36894,
+  "total_sum_incl_vat": 122173638.62,
+  "unmapped_accounts": 0,
+  "duplicate_record_ids": 0,
+  "schema_violations": 0,
+  "status_counts": {
+    "actual": 36565,
+    "open_ar": 329
+  },
+  "driver_counts": {
+    "milestone_billing": 36859,
+    "other": 28,
+    "customer_payment": 7
+  },
+  "per_file": [
+    {
+      "file": "GB 8000 jan-dec 23.xlsx",
+      "rows_in": 1096,
+      "rows_out": 1096,
+      "sum_amount_incl_vat": 569442.11,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8000 jan-dec 24.xlsx",
+      "rows_in": 1036,
+      "rows_out": 1036,
+      "sum_amount_incl_vat": 1419041.71,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8000 jan-dec 25.xlsx",
+      "rows_in": 946,
+      "rows_out": 939,
+      "sum_amount_incl_vat": 1523552.45,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8000 jan-mei 26.xlsx",
+      "rows_in": 356,
+      "rows_out": 356,
+      "sum_amount_incl_vat": 377911.18,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8001 jan-dec 23.xlsx",
+      "rows_in": 1847,
+      "rows_out": 1847,
+      "sum_amount_incl_vat": 12266233.82,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8001 jan-dec 24.xlsx",
+      "rows_in": 2024,
+      "rows_out": 2024,
+      "sum_amount_incl_vat": 10666440.29,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8001 jan-dec 25.xlsx",
+      "rows_in": 1650,
+      "rows_out": 1650,
+      "sum_amount_incl_vat": 11233767.47,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8001 jan-mei 26.xlsx",
+      "rows_in": 724,
+      "rows_out": 724,
+      "sum_amount_incl_vat": 6342641.74,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "GB 8002 jan-dec 23.xlsx",
+      "rows_in": 1,
+      "rows_out": 1,
+      "sum_amount_incl_vat": 4000.0,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2023-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions.xlsx",
+      "rows_in": 3196,
+      "rows_out": 3196,
+      "sum_amount_incl_vat": 8061400.37,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2023.2-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions.xlsx",
+      "rows_in": 2,
+      "rows_out": 2,
+      "sum_amount_incl_vat": 2150.0,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2023.3-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-Fintransactions.xlsx",
+      "rows_in": 1100,
+      "rows_out": 1100,
+      "sum_amount_incl_vat": 1980985.66,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2024-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions (1).xlsx",
+      "rows_in": 3340,
+      "rows_out": 3340,
+      "sum_amount_incl_vat": 11493540.79,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2024.2-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-Fintransactions.xlsx",
+      "rows_in": 1638,
+      "rows_out": 1638,
+      "sum_amount_incl_vat": 3797307.1,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2025-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions.xlsx",
+      "rows_in": 2466,
+      "rows_out": 2466,
+      "sum_amount_incl_vat": 13142296.66,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2025.2-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-Fintransactions.xlsx",
+      "rows_in": 26,
+      "rows_out": 26,
+      "sum_amount_incl_vat": 65961.27,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2025.3-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-Fintransactions.xlsx",
+      "rows_in": 1080,
+      "rows_out": 1080,
+      "sum_amount_incl_vat": 5338601.27,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2026-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions.xlsx",
+      "rows_in": 822,
+      "rows_out": 822,
+      "sum_amount_incl_vat": 3599956.06,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2026.2-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-FinTransactions.xlsx",
+      "rows_in": 106,
+      "rows_out": 106,
+      "sum_amount_incl_vat": 303327.02,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "82604-2026.3-Dakdekkersbedrijf_Peter_Ummels-04-06-2026-Fintransactions.xlsx",
+      "rows_in": 798,
+      "rows_out": 798,
+      "sum_amount_incl_vat": 3347812.92,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 2.xlsx#2023",
+      "rows_in": 3609,
+      "rows_out": 3609,
+      "sum_amount_incl_vat": 7240370.53,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 2.xlsx#2024",
+      "rows_in": 3812,
+      "rows_out": 3812,
+      "sum_amount_incl_vat": 7776721.47,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 2.xlsx#2025",
+      "rows_in": 3929,
+      "rows_out": 3929,
+      "sum_amount_incl_vat": 8335424.01,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 2.xlsx#2026",
+      "rows_in": 968,
+      "rows_out": 968,
+      "sum_amount_incl_vat": 2113500.64,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    },
+    {
+      "file": "Altis dataset 2.xlsx#Company E 2026",
+      "rows_in": 329,
+      "rows_out": 329,
+      "sum_amount_incl_vat": 1171252.08,
+      "unmapped_accounts": 0,
+      "schema_violations": []
+    }
+  ]
+}
