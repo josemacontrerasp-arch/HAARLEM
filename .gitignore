@@ -1,0 +1,15 @@
+# ---- Altis licensed data: NEVER commit (event-only license, public repo) ----
+datasets-*/
+portfolio company*/
+*.xlsx
+*.xls
+*.parquet
+*.duckdb
+*.sqlite
+
+# ---- tooling / local ----
+.claude/
+__pycache__/
+*.pyc
+.venv/
+venv/
