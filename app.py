@@ -21,22 +21,19 @@ from engine.forecast import build_all_opcos
 from engine.load import load_projects, load_transactions
 
 
-ScenarioConfig = Tuple[str, Dict[str, int], str]
+ScenarioConfig = Tuple[str, str]
 
 SCENARIOS: Dict[str, ScenarioConfig] = {
     "Base": (
         "base",
-        {},
         "No weather adjustment. This is the baseline 13-week cash forecast.",
     ),
     "Wet Quarter": (
         "wet-quarter",
-        {"PRJ-118": 21, "PRJ-091": 28},
         "Weather-exposed projects lose working days, pushing billing and collections later.",
     ),
     "Dry Quarter": (
         "dry-quarter",
-        {"PRJ-118": -7, "PRJ-091": -10},
         "Weather-exposed projects regain working days, pulling some billing and collections earlier.",
     ),
 }
@@ -67,6 +64,7 @@ class DashboardState:
     projects: List[Project]
     forecasts: Dict[str, Forecast]
     opco_forecasts: Dict[str, Dict[str, Forecast]] = field(default_factory=dict)
+    weather_shifts: Dict[str, Dict[str, int]] = field(default_factory=dict)
     data_label: str = "Demo stub data"
     data_note: str = ""
     transaction_summary: Optional[Dict[str, object]] = None
@@ -91,6 +89,31 @@ def format_shift(weather_shift: Dict[str, int]) -> str:
     if not weather_shift:
         return "none"
     return ", ".join(f"{project}: {days:+d}d" for project, days in weather_shift.items())
+
+
+def weather_exposed_projects(projects: List[Project]) -> List[Project]:
+    return [project for project in projects if project.weather_exposure > 0]
+
+
+def weather_shift_days(project: Project, scenario: str) -> int:
+    exposure = max(0.0, min(float(project.weather_exposure), 1.0))
+    if scenario == "wet-quarter":
+        return max(1, round(35 * exposure))
+    if scenario == "dry-quarter":
+        return min(-1, -round(14 * exposure))
+    return 0
+
+
+def build_weather_shift(projects: List[Project], scenario: str) -> Dict[str, int]:
+    if scenario == "base":
+        return {}
+
+    weather_shift: Dict[str, int] = {}
+    for project in weather_exposed_projects(projects):
+        days = weather_shift_days(project, scenario)
+        if days != 0:
+            weather_shift[project.project_id] = days
+    return weather_shift
 
 
 def discover_files(suffixes: set[str]) -> List[str]:
@@ -134,12 +157,20 @@ def build_forecast_bundle(
     transactions: List[Transaction],
     projects: List[Project],
     cfg: ForecastConfig,
-) -> Tuple[Dict[str, Forecast], Dict[str, Dict[str, Forecast]], List[str]]:
+) -> Tuple[
+    Dict[str, Forecast],
+    Dict[str, Dict[str, Forecast]],
+    Dict[str, Dict[str, int]],
+    List[str],
+]:
     forecasts: Dict[str, Forecast] = {}
     opco_forecasts: Dict[str, Dict[str, Forecast]] = {}
+    weather_shifts: Dict[str, Dict[str, int]] = {}
     build_notes: List[str] = []
 
-    for label, (scenario, weather_shift, _) in SCENARIOS.items():
+    for label, (scenario, _) in SCENARIOS.items():
+        weather_shift = build_weather_shift(projects, scenario)
+        weather_shifts[label] = weather_shift
         try:
             by_opco = build_all_opcos(
                 transactions,
@@ -167,19 +198,22 @@ def build_forecast_bundle(
                 f"{label}: build_all_opcos failed; used build_forecast fallback ({exc})"
             )
 
-    return forecasts, opco_forecasts, build_notes
+    return forecasts, opco_forecasts, weather_shifts, build_notes
 
 
 def load_stub_state(note: str = "") -> DashboardState:
     cfg = ForecastConfig()
     transactions, projects = make_stub(cfg)
-    forecasts, opco_forecasts, build_notes = build_forecast_bundle(transactions, projects, cfg)
+    forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
+        transactions, projects, cfg
+    )
     return DashboardState(
         cfg=cfg,
         transactions=transactions,
         projects=projects,
         forecasts=forecasts,
         opco_forecasts=opco_forecasts,
+        weather_shifts=weather_shifts,
         data_label="Demo stub data",
         data_note=note or "Using synthetic Lane B/Lane C demo data.",
         build_notes=build_notes,
@@ -193,13 +227,16 @@ def load_real_state(transactions_path: str, projects_path: str) -> DashboardStat
     resolved_projects = resolve_data_path(projects_path, "Projects")
     transactions, summary = load_transactions(resolved_transactions)
     projects = load_projects(resolved_projects)
-    forecasts, opco_forecasts, build_notes = build_forecast_bundle(transactions, projects, cfg)
+    forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
+        transactions, projects, cfg
+    )
     return DashboardState(
         cfg=cfg,
         transactions=transactions,
         projects=projects,
         forecasts=forecasts,
         opco_forecasts=opco_forecasts,
+        weather_shifts=weather_shifts,
         data_label="Real data",
         data_note=(
             f"Loaded {len(transactions):,} transactions and {len(projects):,} projects."
@@ -714,14 +751,29 @@ def main() -> None:
                 st.write(note)
 
     selected_label = st.sidebar.selectbox("Scenario", list(SCENARIOS), key="scenario")
-    scenario_name, weather_shift, scenario_note = SCENARIOS[selected_label]
+    scenario_name, scenario_note = SCENARIOS[selected_label]
+    weather_shift = state.weather_shifts.get(selected_label, {})
     forecast = forecasts[selected_label]
     base_forecast = forecasts["Base"]
 
     st.sidebar.markdown("**Scenario input**")
     st.sidebar.write(scenario_note)
     st.sidebar.caption(f"Engine scenario: `{scenario_name}`")
-    st.sidebar.caption(f"Weather shift: {format_shift(weather_shift)}")
+    exposed_project_ids = [
+        project.project_id for project in weather_exposed_projects(projects)
+    ]
+    if not exposed_project_ids:
+        st.sidebar.warning(
+            "No weather-exposed projects are loaded. Wet/dry scenarios will not move forecast timing."
+        )
+    elif weather_shift:
+        st.sidebar.caption(f"Shifted project IDs: {', '.join(sorted(weather_shift))}")
+        st.sidebar.caption(f"Weather shift: {format_shift(weather_shift)}")
+    else:
+        st.sidebar.caption(
+            f"Weather-exposed project IDs: {', '.join(sorted(exposed_project_ids))}"
+        )
+        st.sidebar.caption("Weather shift: none for the base scenario")
     st.sidebar.caption(
         f"Forecast scope: {', '.join(state.opco_forecasts.get(selected_label, {}).keys())}"
     )
