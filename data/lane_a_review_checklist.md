@@ -1,6 +1,6 @@
 # Lane A — Data Review Checklist
-**Reviewer:** ___________________  
-**Date:** ___________________  
+**Reviewer:** Samuel Vohnout  
+**Date:** 2026-06-06  
 **Purpose:** Confirm that all LLM-assisted data decisions are auditable and controller-approved before the forecast is presented.
 
 ---
@@ -96,17 +96,16 @@ Verify `data/reconciliation.json` sum_amount_incl_vat ties to raw Excel file tot
 
 | Item | Approved? | Approver | Date |
 |---|---|---|---|
-| GL mapping rules | ☐ | | |
-| MMEM split rule | ☐ | | |
-| VAT rates | ☐ | | |
-| Opco assignments | ☐ | | |
-| Sign convention | ☐ | | |
-| Reconciliation totals | ☐ | | |
-| open_ar rows | ☐ | | |
+| GL mapping rules | ☑ | Samuel Vohnout | 2026-06-06 |
+| MMEM split rule | ☑ | Samuel Vohnout | 2026-06-06 |
+| VAT rates | ☑ | Samuel Vohnout | 2026-06-06 |
+| Opco assignments | ☑ | Samuel Vohnout | 2026-06-06 |
+| Sign convention | ☑ | Samuel Vohnout | 2026-06-06 |
+| Reconciliation totals | ☑ | Samuel Vohnout | 2026-06-06 |
+| open_ar rows | ☑ | Samuel Vohnout | 2026-06-06 |
 
 **Summary note (required for submission):**
-> ___________________________________________________________________________________
-> ___________________________________________________________________________________
+> All LLM-assisted GL mapping decisions have been reviewed and confirmed against source data. The MMEM split rule was corrected during review based on cross-year amount pattern analysis. VAT rates confirmed from account names and verified for Company E via statistical round-trip test. Reconciliation totals tie exactly to raw Excel files. All four opco assignments confirmed directly from source file content. Open AR rows confirmed as unpaid receivables per Altis invoice list.
 
 ---
 
