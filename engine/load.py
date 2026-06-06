@@ -111,6 +111,55 @@ def _read_duckdb(path: str) -> List[Dict]:
     return [dict(zip(cols, row)) for row in rel.fetchall()]
 
 
+def suggest_anchor(transactions: List[Transaction]):
+    """Pick a Monday so the forward-looking rows (open_ar/open_ap/wip) actually
+    fall inside the 13-week horizon.
+
+    The real data is ~99% historical `actual` with a handful of open receivables
+    dated months back, so anchoring at "today" yields an empty forecast. We anchor
+    on the Monday of the week containing the EARLIEST forward-looking row instead.
+    """
+    from datetime import timedelta
+    fwd = [t.date for t in transactions if t.status in ("open_ar", "open_ap", "wip")]
+    if not fwd:
+        return None
+    earliest = min(fwd)
+    return earliest - timedelta(days=earliest.weekday())   # back up to Monday
+
+
+def opening_balance_from_actuals(transactions: List[Transaction], anchor) -> float:
+    """Real opening bank position = settled actual CASH up to the anchor.
+
+    Important: most `actual` rows are revenue accruals (sales journal), NOT bank
+    movements — summing them all overstates cash by orders of magnitude. We count
+    only actual cash-like rows: the cash/bank account (unified 1100) or
+    customer_payment receipts. If the GL exports contain no bank lines (likely),
+    this is ~0 and the opening balance should be supplied by config instead.
+    """
+    cash = [t for t in transactions
+            if t.status == "actual" and t.date < anchor
+            and (t.gl_account_unified == "1100" or t.driver_type == "customer_payment")]
+    return round(sum(t.amount_incl_vat for t in cash), 2)
+
+
+def load_state(txn_path: str, projects_path: Optional[str] = None, cfg=None):
+    """One call for the app: load the real table + projects, auto-anchor, and set
+    the real opening balance. Returns (transactions, projects, cfg, summary)."""
+    from .config import ForecastConfig
+    txns, summary = load_transactions(txn_path)
+    projects = load_projects(projects_path)
+    cfg = cfg or ForecastConfig()
+    anchor = suggest_anchor(txns)
+    if anchor:
+        cfg.anchor_monday = anchor
+        real_cash = opening_balance_from_actuals(txns, anchor)
+        # only trust a real cash opening if the GL actually had bank lines;
+        # otherwise keep the config default (the exports are revenue-only).
+        if abs(real_cash) > 1.0:
+            cfg.opening_balance = real_cash
+    return txns, projects, cfg, summary
+
+
 def load_projects(path: Optional[str]) -> List[Project]:
     """Read project/milestone records from JSON (PRD section 5 shape) if present."""
     if not path:

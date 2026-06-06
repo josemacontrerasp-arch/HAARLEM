@@ -16,7 +16,14 @@ from .learn import (
     estimate_weather_coeffs,
     predict_days_lost,
 )
-from .load import load_projects, load_transactions
+from .load import (
+    load_projects,
+    load_state,
+    load_transactions,
+    opening_balance_from_actuals,
+    suggest_anchor,
+)
+from .weather import days_lost_for_projects, scenario_shift, summarise_weather
 from .schema import (
     Milestone,
     Project,
@@ -36,4 +43,6 @@ __all__ = [
     "validate_transaction", "make_stub", "compute_vat_remittances",
     "Coefficient", "WeatherObs", "estimate_payment_lag",
     "estimate_weather_coeffs", "predict_days_lost",
+    "load_state", "suggest_anchor", "opening_balance_from_actuals",
+    "days_lost_for_projects", "scenario_shift", "summarise_weather",
 ]
