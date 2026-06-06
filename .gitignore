@@ -14,7 +14,8 @@ portfolio company*/
 # ---- generated engine output ----
 forecast_*.json
 
-# ---- tooling / local ----
+# ---- OS / tooling / local ----
+.DS_Store
 .claude/
 __pycache__/
 *.pyc

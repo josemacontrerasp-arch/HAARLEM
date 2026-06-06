@@ -1,12 +1,8 @@
 # Engine core (schema, forecast, covenant, vat, config, stub) is pure stdlib.
-numpy            # engine/learn.py — interpretable ML coefficients
+numpy            # engine/learn.py - the two calibrated coefficients
+duckdb           # engine/load.py - read reconciled parquet/duckdb tables (CSV needs nothing)
+streamlit>=1.36  # app.py - the role-based dashboard
 
-# Loading Lane A's real output:
-duckdb           # read parquet / duckdb tables in engine/load.py (CSV needs nothing)
-
-# Lane C dashboard:
-streamlit>=1.36
-
-# Only for inspecting raw .xlsx exports (Lane A's input, not the engine):
+# Only for inspecting raw .xlsx exports (ingestion input, not the engine):
 # openpyxl
 # pandas
