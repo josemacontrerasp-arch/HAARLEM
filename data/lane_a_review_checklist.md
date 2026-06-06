@@ -36,12 +36,12 @@ The LLM derived this rule from patterns in the data:
 ### 1c. VAT rates per account
 | Account | VAT Rate Assigned | Confirmed? | Notes |
 |---|---|---|---|
-| 8000 (Omzet hoog) | 21% | ☐ | |
-| 8001 (Omzet verlegd) | 0% (reverse charge) | ☐ | |
-| 8002 (Omzet 9%) | 9% | ☐ | |
-| 8004 (Omzet 0%) | 0% | ☐ | |
-| 8005 (Omzet verlegd, Yuki) | 0% (reverse charge) | ☐ | |
-| Company E invoices | 21% (assumed, no breakdown) | ☐ | |
+| 8000 (Omzet hoog) | 21% | ☑ | Confirmed — "hoog" = standard Dutch rate |
+| 8001 (Omzet verlegd) | 0% (reverse charge) | ☑ | Confirmed — "verlegd" = reverse charge, buyer pays |
+| 8002 (Omzet 9%) | 9% | ☑ | Confirmed — account name literally states 9% |
+| 8004 (Omzet 0%) | 0% | ☑ | Confirmed — account name literally states 0% |
+| 8005 (Omzet verlegd, Yuki) | 0% (reverse charge) | ☑ | Confirmed — same reverse charge as 8001 |
+| Company E invoices | 21% | ☑ | Verified — 292/325 amounts round-trip through ÷1.21×1.21; Snelstart 2026 GL confirms 21% on 376/379 credit entries |
 
 ---
 
