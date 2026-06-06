@@ -1,105 +1,196 @@
-# Altis Weather-Aware Cash Flow Forecast — Engine (Lane B)
+# Altis — Weather-Aware 13-Week Cash Flow Forecast
 
-One reconciliation-and-forecasting engine: a 13-week cash forecast where **every
-number traces to its source journal line**, with a weather toggle that cascades
-causally to the covenant warning light. Thin role views read one engine, so no
-two numbers disagree.
+**One reconciled engine. Four role views. A weather toggle that cascades all the
+way to the covenant light — and every number clicks down to the journal line
+behind it.**
 
-See [`altis_prd.md`](altis_prd.md) (product) and [`altis_lanes.md`](altis_lanes.md) (team split).
+Built for Altis Groep: a private-equity-backed portfolio of Dutch roofing
+companies, each on a different accounting system, all sitting under one loan
+covenant. Finance leadership needs a short-horizon cash forecast they can *defend*
+to the board — not a dashboard they have to take on faith.
 
-## Quick start
+---
 
-```bash
-py run_demo.py      # build base + wet-quarter, move the covenant light, drill a cell
-py tests.py         # 13 invariants (trace exactness, opco reconciliation, covenant, ML)
+## What it is, in one breath
+
+> A **scenario-driven forecasting engine, statistically calibrated.**
+
+The scenario engine is the spine: deterministic, auditable, counterfactual-native
+("what happens to cash if the next quarter is wet?"). Statistics plays a small,
+honest supporting role — it fits just **two interpretable coefficients** that feed
+the timing rules:
+
+1. **payment lag** per customer segment (days from invoice to cash), and
+2. **working-days-lost** per mm of rain / per frost day.
+
+That's the whole use of statistical methods. No black-box predictor sits on the
+critical path, so every figure stays explainable and every assumption stays
+overridable. A CFO can see exactly why a number moved — which is the only kind of
+forecast a CFO will actually trust on a Monday morning.
+
+---
+
+## Why this isn't a BI dashboard with a weather multiplier
+
+The naïve version multiplies cash by "0.8 in a wet quarter." That's untraceable
+and wrong: weather doesn't shrink cash, it **moves it in time**. Our model treats
+weather as a **causal delay operator**:
+
+```
+rain / frost
+   → fewer workable days
+   → weather-dependent milestones slip later
+   → billing shifts right
+   → collections shift further right (by each customer's payment lag)
+   → liquidity dips        ← the squeeze: materials were already paid
+   → covenant headroom moves
 ```
 
-The engine core (schema, forecast, covenant, vat, config, stub) is **pure stdlib**.
-`learn.py` needs numpy; reading Lane A's real table needs duckdb (parquet) — see
-`requirements.txt`.
+Committed **materials stay put** while **billing slides** — that gap *is* the cash
+squeeze, and it falls straight out of the model instead of being faked.
 
-## Architecture — the spine A and C plug into
+---
+
+## The four roles (one engine, no two numbers disagree)
+
+Every view reads the **same computed forecast object**. Consistency is structural,
+not maintained by hand.
+
+| Role | The question it answers | What it shows |
+|---|---|---|
+| **PE Board** | "Are we safe on the covenant before the meeting?" | Consolidated portfolio, covenant traffic light, quarterly leverage test |
+| **CFO** | "What's my 13-week cash by driver, and what happens in a wet quarter?" | Full forecast, driver breakdown, scenario toggles, cross-opco compare |
+| **Opco MD** | "What's my WIP exposure and which projects are at risk?" | Per-opco WIP, project risk signals, materials/subcontractor commitments |
+| **Project Lead** | "When's my next invoice and will weather delay it?" | Next invoiceable milestone, materials outflows, schedule risk |
+
+## The five drivers (modelled separately, each independently tunable)
+
+| Driver | What it represents |
+|---|---|
+| **Materials outflow** | Roofing materials, ordered & paid ahead of execution (committed — doesn't slip) |
+| **Subcontractor** | Costs tied to milestone progress (slips with weather) |
+| **Milestone billing** | Invoiceable milestones; completion creates a receivable (VAT-aware) |
+| **Customer payment behaviour** | Receivable arrives at invoice date + lag, per customer segment |
+| **Weather impact** | Not a line item — the operator that shifts the timing of all of the above |
+
+Cash is never lumped. Click any week and it decomposes into exactly these streams.
+
+---
+
+## Architecture
+
+A clean pipeline, each stage swappable:
 
 ```
-Lane A (data)                Lane B (engine = this)                 Lane C (experience)
-raw exports ──reconcile──►  Transaction[] + Project[]
-                            (Contract v1, engine/schema.py)
-                                     │
-                            build_forecast(scenario, opco) ──► Forecast object
-                                     │                          • drivers / net_cash
-                            weather_shift {proj: days_lost} ◄───── Lane C owns this
-                                     │                          • running_balance
-                            covenant.headroom_metric ──────────► • covenant_headroom + lights
-                                     │                          • trace(week, driver)
-                                     └──────────────────────────► one object, all role views
+ ingest_*.py              engine/                                    app.py
+ ┌────────────┐   ┌──────────────────────────────────────────┐   ┌───────────┐
+ │ Gilde      │   │ schema   → one canonical transaction record │   │ CFO       │
+ │ Yuki       │──▶│ load     → reconcile + project pipeline      │──▶│ Opco MD   │
+ │ Snelstart  │   │ drivers  → 5 streams, week by week           │   │ Proj Lead │
+ │ (Exact*)   │   │ weather  → scenario delay operator           │   │ PE Board  │
+ └────────────┘   │ covenant → headroom + traffic light          │   └───────────┘
+   GL mapping     │ learn    → 2 calibrated coefficients          │   one object,
+   (controller-   │ trace()  → every cell → source journal line   │   all views
+    approved)     └──────────────────────────────────────────────┘
 ```
-
-Key files:
 
 | File | Responsibility |
 |---|---|
-| `engine/schema.py` | Contract v1 (`Transaction`), `Project`/`Milestone`, and `TracedValue` |
-| `engine/forecast.py` | the spine: `build_forecast`, `build_all_opcos`, `trace`, `to_dict`, `biggest_movers` |
-| `engine/covenant.py` | all 3 covenant rules (min_liquidity / leverage / dscr), config-selected |
-| `engine/vat.py` | quarterly BTW remittance from the VAT column |
-| `engine/learn.py` | interpretable ML coefficients (payment lag, weather slip) |
-| `engine/load.py` | read Lane A's real parquet/duckdb/csv → engine objects + recon summary |
-| `engine/config.py` | every tunable assumption in one place |
-| `engine/stub.py` | synthetic data so all lanes build in parallel |
+| `ingest_gilde.py`, `ingest_yuki.py`, `ingest_snelstart.py`, `ingest_all.py` | Per-system adapters → one canonical schema |
+| `data/gl_mapping.csv` | Chart-of-accounts mapping (controller-approvable rules) |
+| `engine/schema.py` | The canonical contract: transaction, project/milestone, **trace metadata** |
+| `engine/load.py` | Load reconciled data, normalise opcos, build the real-data state |
+| `engine/forecast.py` | The spine: 13-week forecast, drivers, `trace()`, per-opco + consolidated |
+| `engine/weather.py` | Keyless Open-Meteo → working-days-lost (the delay operator) |
+| `engine/learn.py` | Statistical calibration of the two coefficients |
+| `engine/covenant.py` | Covenant headroom + traffic light (leverage / liquidity) |
+| `engine/ebitda.py`, `engine/vat.py` | EBITDA from P&L; quarterly BTW remittance |
+| `app.py` | Streamlit dashboard — the four role views |
 
-## How forecasting works (the status lifecycle)
+---
 
-The engine reads the unified table and forecasts forward cash from `status`:
+## Run it
 
-| status | meaning | engine treatment |
-|---|---|---|
-| `actual` | cash already moved | anchors the opening balance |
-| `open_ar` | invoice issued, unpaid | inflow at `date + payment_lag(segment)` |
-| `open_ap` | committed cost, unpaid | outflow at `date` |
-| `wip` | work done, not invoiced | becomes milestone billing → inflow after lag |
+```bash
+pip install -r requirements.txt
 
-**Weather operator:** for weather-exposed projects, a scenario shifts the
-*revenue side* (billing/collections, milestone-tied subcontractor) right by the
-days lost — but **committed materials stay put**. That gap is the cash squeeze.
+streamlit run app.py        # the dashboard (four role views, scenario toggle, drill-down)
+py run_demo.py              # headless: forecast + covenant + an audit-trail walkthrough
+py tests.py                 # 14 engine invariants (traceability, reconciliation, covenant…)
+```
 
-**Traceability:** every cash contribution is a `TracedValue` carrying its source
-records, assumptions, scenario and formula. `trace(week, driver)` is just a
-filter — drill-down is exact (a test asserts traces sum to the cell).
+The engine core is pure Python standard library; `numpy` powers the two
+coefficients, `duckdb` reads reconciled tables, `streamlit` runs the UI.
 
-## Integration TODOs (waiting on inputs)
+---
 
-- [ ] **Covenant doc** → set `covenant_metric` + numbers in `config.py`. All three
-      rule types are already implemented, so this is a config flip, not a rewrite.
-- [ ] **Lane A's reconciled v1 table** → point `load_transactions(path)` at it.
-- [ ] **Lane A: `counterparty_segment`** → drop the temp lookup in `config.py`.
-- [ ] **Lane A: project/milestone table** → feed via `load_projects(json)`.
-- [ ] **Lane C: weather shift** → already the exact `{project_id: days_lost}` input.
+## Traceability — the heart of it
 
-## Assumptions (documented for the judges)
+Every computed value is born carrying its own trace (source records, assumptions,
+scenario, toggle values, formula). Drill-down isn't bolted on afterwards — it's a
+filter over data that was always there. The walkthrough a controller would run:
 
-No covenant terms, cost data, or debt figures were provided. Rather than invent
-precise numbers, we use **explicit, industry-standard assumptions** (all in
-`config.py`, all overridable). `engine/ebitda.derive_covenant_inputs()` applies them.
+```
+Wet quarter, week 9 liquidity dips
+  → decomposes into the five drivers
+  → biggest mover: deferred milestone billing
+  → traces to specific weather-exposed roofs whose schedules slipped
+  → invoices pushed right, collections pushed further right by payment lag
+  → click the figure → the actual reconciled GL lines + the mapping rule that placed them
+```
+
+`forecast.trace(week, driver)` returns every contributing record. A test asserts
+traces sum **exactly** to the cell they explain.
+
+---
+
+## Built-in resilience (survives the edge cases)
+
+- **New / unknown GL account** → flagged `UNMAPPED`, kept (never dropped), bucketed
+  so the forecast doesn't break.
+- **Late correction journal** → modelled via the status lifecycle (`actual` vs
+  accrual vs WIP), so corrections don't double-count cash.
+- **Slipping project** → that's the weather operator's normal behaviour, not a
+  failure mode.
+- **New opco** → a configuration entry, not a rebuild (`build_all_opcos`).
+
+---
+
+## Assumptions (documented, every one overridable)
+
+We were not given covenant terms, cost data, debt figures, or a project/WIP file.
+Rather than invent precise numbers, we use **explicit industry-standard assumptions**
+(all in `engine/config.py`):
 
 | Input | Assumption | Basis |
 |---|---|---|
-| Covenant form | Net Debt / EBITDA, TTM, tested quarterly | Stated verbally by the lender |
-| EBITDA | revenue × **10%** | Typical roofing/construction EBITDA margin (~8–15%). The one opco with cost data shows a 66% margin → costs are incomplete, so we don't use it |
-| Net debt | **3.0×** EBITDA | Typical PE-buyout entry leverage |
-| Covenant cap | **3.5×** | Typical mid-market leverage covenant |
+| Covenant | Net Debt / EBITDA, trailing-12m, tested quarterly | Lender's stated form |
+| EBITDA | revenue × **10%** | Typical roofing margin (~8–15%); only one opco had costs, at an implausible 66% → not used |
+| Net debt | **3.0×** EBITDA | Typical PE entry leverage |
+| Covenant cap | **3.5×** | Typical mid-market covenant |
+| Opening cash | ~1 month of revenue | No bank export was provided |
+| Project pipeline | calibrated to each opco's real revenue | No WIP file was provided (the brief allows *realistic* data) |
 
-Result on real revenue: TTM EBITDA ≈ €3.6M, net debt ≈ €10.8M, leverage ≈ 3.0×
-vs a 3.5× cap (~0.5× headroom). Every figure carries the assumption that produced it.
+**Liquidity vs leverage (a real finding):** a quarterly TTM leverage covenant
+barely reacts to 13-week cash timing, so the weather cascade is surfaced on the
+weekly **liquidity** buffer (the CFO's early warning), while **leverage** is the
+quarterly board test. Both are computed; neither contradicts the other.
 
-**Liquidity vs leverage:** a TTM/quarterly leverage covenant barely reacts to
-13-week cash timing, so the weather cascade is surfaced on the weekly **liquidity**
-buffer (`liquidity_headroom()`), while the **leverage** covenant is the quarterly
-board test (`covenant_test_summary()`).
-
-- Payment lags are placeholder coefficients until estimated from real paired
-  invoice/payment data via `engine/learn.py`.
+---
 
 ## Data handling
 
-Altis data is **event-licensed**: do not commit it; delete all copies within 3
-days of the event (PRD §11). `.gitignore` excludes the data folders.
+All Altis data is anonymised and **licensed for the event only**. It must be
+deleted from every location within 3 days of the hackathon. Raw exports and the
+P&L file are git-ignored and must not be redistributed.
+
+---
+
+## How this maps to the scoring
+
+| Criterion | Where we earn it |
+|---|---|
+| **Impact & Relevance** | A defensible forecast a CFO would open Monday; the materials-vs-billing squeeze; liquidity-vs-leverage distinction |
+| **Technical Depth** | 3 systems reconciled into one schema; survives UNMAPPED / corrections / slips; per-opco = consolidated, proven by test |
+| **Auditability** | Every cell → driver → assumption → toggle → source line; one source of truth feeds all four roles |
+| **Innovation** | Weather as a causal delay operator (not a multiplier); scenario-driven + statistically calibrated; the squeeze made visible |
