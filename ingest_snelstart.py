@@ -39,8 +39,8 @@ SOURCE_SYSTEM = "snelstart"
 SOURCE_FILE_GL = "Altis dataset 2.xlsx"
 SOURCE_FILE_CE = "Altis dataset 2.xlsx"
 DATA_PATH = "data/datasets/Altis dataset 2.xlsx"
-OPCO_GL = "OpcoWinschoten"
-OPCO_CE = "CompanyE"
+OPCO_GL = "Winschoten"
+OPCO_CE = "Winschoten"
 
 _MAPPING: Dict[str, Tuple[str, str]] = {}
 
