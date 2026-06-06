@@ -15,6 +15,11 @@ portfolio company*/
 forecast_*.json
 *.log
 
+# ---- secrets: API keys, never commit (a .env.example template is tracked) ----
+.env
+.env.*
+!.env.example
+
 # ---- OS / tooling / local ----
 .DS_Store
 .claude/

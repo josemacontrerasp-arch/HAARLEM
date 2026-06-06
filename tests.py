@@ -193,6 +193,65 @@ def t_weather_scenario_shift():
     check("weather scenario_shift: base=0, wet>0, dry<=0, drives forecast", ok)
 
 
+def t_llm_mapping_heuristic_agrees():
+    # The keyless heuristic backend should reproduce the controller-approved chart
+    # for the clear-cut accounts and flag only the genuinely ambiguous ones.
+    from llm_gl_mapping import build_report
+    report = build_report(backend="heuristic")
+    ok = (report.backend == "heuristic"
+          and report.n_accounts >= 12
+          and report.agreement_rate >= 0.75       # strong but honest (~83%)
+          and report.driver_agreement_rate >= 0.85
+          and report.n_flagged_for_review >= 1)   # MMEM / Gilde-routed are flagged
+    check("LLM-mapping heuristic reproduces approved chart + flags ambiguous", ok)
+
+
+def t_llm_mapping_reverse_charge():
+    from llm_gl_mapping import load_catalog, heuristic_suggest, NativeAccount
+    catalog = load_catalog()
+    acc = NativeAccount("gilde", "8001", "Omzet verlegd (reverse charge)")
+    s = heuristic_suggest(acc, catalog)
+    ok = (s.suggested_unified == "8001"
+          and s.suggested_driver == "milestone_billing"
+          and s.confidence > 0.5 and s.rationale)
+    check("LLM-mapping: 'verlegd' -> reverse-charge 8001 with a rationale", ok)
+
+
+def t_llm_mapping_new_account_flagged():
+    # A brand-new, unrecognised account must never crash and must be held for the
+    # controller (kept, not silently dropped).
+    from llm_gl_mapping import load_catalog, suggest, review, NativeAccount
+    catalog = load_catalog()
+    new = NativeAccount("yuki", "99999", "Volstrekt onbekende boeking xyz")
+    d = review(suggest(new, catalog, backend="heuristic"), new)
+    ok = (d.suggestion.suggested_unified == "UNMAPPED"
+          and d.decision == "reject"
+          and d.suggestion.confidence < 0.5)
+    check("LLM-mapping: unknown account -> UNMAPPED, flagged for review", ok)
+
+
+def t_exact_adapter_reconciles():
+    # Guarded: needs pandas + the (git-ignored) raw export. Skip cleanly if absent.
+    try:
+        import pandas  # noqa: F401
+        from ingest_exact import ingest_exact
+        from engine.schema import validate_transaction
+    except ImportError:
+        check("exact adapter reconciles into the schema (skipped: pandas absent)", True)
+        return
+    import os
+    if not os.path.exists("data/datasets/Altis dataset 1.xlsx"):
+        check("exact adapter reconciles into the schema (skipped: data absent)", True)
+        return
+    txns, summaries = ingest_exact()
+    violations = [v for t in txns for v in validate_transaction(t)]
+    ok = (len(txns) > 0
+          and not violations
+          and all(t.source_system == "exact" and t.opco == "Andijk" for t in txns)
+          and all(abs(t.amount_incl_vat - (t.amount_excl_vat + t.vat_amount)) < 0.01 for t in txns))
+    check("exact adapter reconciles into the schema (4th system, 0 violations)", ok)
+
+
 def main():
     for fn in [
         t_weather_scenario_shift,
@@ -209,6 +268,10 @@ def main():
         t_covenant_breach_detected,
         t_payment_lag_recovered,
         t_weather_coeffs_recovered,
+        t_llm_mapping_heuristic_agrees,
+        t_llm_mapping_reverse_charge,
+        t_llm_mapping_new_account_flagged,
+        t_exact_adapter_reconciles,
     ]:
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")

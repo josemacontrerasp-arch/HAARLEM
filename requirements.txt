@@ -6,3 +6,8 @@ streamlit>=1.36  # app.py - the role-based dashboard
 # Only for inspecting raw .xlsx exports (ingestion input, not the engine):
 # openpyxl
 # pandas
+
+# Optional - LLM backend for llm_gl_mapping.py. Without either, it runs the
+# keyless deterministic heuristic. Provide the key via the environment.
+# openai           # preferred; set OPENAI_API_KEY
+# anthropic        # set ANTHROPIC_API_KEY
