@@ -19,8 +19,8 @@ For each mapping rule, confirm the `driver_type` is correct.
 | YUKI-8004 | 8004 | Omzet 0% / exempt | milestone_billing | ☐ | |
 | YUKI-8005 | 8005 | Omzet verlegd (Peter Ummels) | milestone_billing | ☐ | |
 | DS2-VERKOOP | 006 - Verkoop | Snelstart sales journal | milestone_billing | ☐ | |
-| DS2-MMEM-WIP | 008 - MMEM (credit, mid-period) | WIP recognition | milestone_billing | ☐ | |
-| DS2-MMEM-ACCRUAL | 008 - MMEM (debit or Dec-31) | Year-end accrual reversal | other | ☐ | |
+| DS2-MMEM-WIP | 008 - MMEM (debit) | WIP accrual | milestone_billing / wip | ☑ | Corrected after cross-year amount analysis — debits open WIP accruals, credits reverse them |
+| DS2-MMEM-ACCRUAL | 008 - MMEM (credit) | Accrual reversal | other / actual | ☑ | Same analysis — credit side reverses the accrual once real invoice is posted |
 | DS2-KAS | 001 - Kas | Cash journal | customer_payment | ☐ | |
 | DS2-GILDE | 60 - Verkoopboek Gilde | Gilde sales via Snelstart | milestone_billing | ☐ | |
 
@@ -31,8 +31,7 @@ The LLM derived this rule from patterns in the data:
 
 > **Controller confirmation required:** Is this interpretation of the Memoriaalboek entries correct?
 
-- ☐ Confirmed correct  
-- ☐ Needs correction — notes: ___________________
+- ☑ Confirmed correct — rule corrected after cross-year amount pattern analysis (2026-06-06)
 
 ### 1c. VAT rates per account
 | Account | VAT Rate Assigned | Confirmed? | Notes |
