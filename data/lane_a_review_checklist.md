@@ -50,11 +50,11 @@ The LLM assigned source files to operating companies based on the Portfolio P&L 
 
 | Source Files | Opco Assigned | Confirmed? | Notes |
 |---|---|---|---|
-| GB 8000 / 8001 / 8002 jan-dec *.xlsx | Heeze (Noord-Brabant) | ☐ | |
-| Altis dataset 2.xlsx (GL sheets) | Winschoten (Groningen) | ☐ | |
-| 82604-* Peter Ummels *.xlsx | PeterUmmels (Brunssum, Limburg) | ☐ | |
-| Altis dataset 1.xlsx | Andijk (Noord-Holland) | ☐ | |
-| Altis dataset 2.xlsx — Company E 2026 | Winschoten | ☐ | |
+| GB 8000 / 8001 / 8002 jan-dec *.xlsx | Heeze (Noord-Brabant) | ☑ | Confirmed via P&L JSON + city label Heeze, Noord-Brabant |
+| Altis dataset 2.xlsx (GL sheets) | Winschoten (Groningen) | ☑ | Confirmed — cell in Totaal sheet literally says "Winschoten" |
+| 82604-* Peter Ummels *.xlsx | PeterUmmels (Brunssum, Limburg) | ☑ | Confirmed — file header says "Dakdekkersbedrijf Peter Ummels" |
+| Altis dataset 1.xlsx | Andijk (Noord-Holland) | ☑ | Confirmed — column header "Andijk" in 2026YTD sheet + P&L JSON |
+| Altis dataset 2.xlsx — Company E 2026 | Winschoten | ☑ | Same file as Winschoten GL sheets, same source system |
 
 ---
 
