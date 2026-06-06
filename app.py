@@ -221,12 +221,20 @@ def load_stub_state(note: str = "") -> DashboardState:
     )
 
 
+DEFAULT_PL_PATH = "data/Altis Groep — Portfolio P&L Data (Aggregated).json"
+
+
 def load_real_state(transactions_path: str, projects_path: str) -> DashboardState:
+    # Use the engine's one-call real-data loader: real reconciled transactions +
+    # a revenue-calibrated project/WIP pipeline + covenant inputs + opco mapping +
+    # a documented opening-cash assumption. The "Projects" path picker is reused
+    # here as the P&L JSON path; leave it blank to use the default.
+    from engine.load import load_full_state
+
     cfg = ForecastConfig()
     resolved_transactions = resolve_data_path(transactions_path, "Transactions")
-    resolved_projects = resolve_data_path(projects_path, "Projects")
-    transactions, summary = load_transactions(resolved_transactions)
-    projects = load_projects(resolved_projects)
+    pl_path = resolve_data_path(projects_path, "P&L") if projects_path.strip() else DEFAULT_PL_PATH
+    transactions, projects, cfg, summary = load_full_state(resolved_transactions, pl_path, cfg)
     forecasts, opco_forecasts, weather_shifts, build_notes = build_forecast_bundle(
         transactions, projects, cfg
     )
@@ -239,7 +247,9 @@ def load_real_state(transactions_path: str, projects_path: str) -> DashboardStat
         weather_shifts=weather_shifts,
         data_label="Real data",
         data_note=(
-            f"Loaded {len(transactions):,} transactions and {len(projects):,} projects."
+            f"Loaded {len(transactions):,} transactions + "
+            f"{summary.get('pipeline_projects', 0)} pipeline projects; "
+            f"opening cash EUR {cfg.opening_balance:,.0f}."
         ),
         transaction_summary=summary,
         build_notes=build_notes,
