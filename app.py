@@ -25,6 +25,10 @@ from engine import (
 )
 from engine.forecast import build_all_opcos
 
+# Importing the panel also loads the local .env (via llm_gl_mapping), so
+# OPENAI_API_KEY is picked up automatically when the app runs.
+from mapping_panel import render_mapping_review
+
 
 ScenarioConfig = Tuple[str, str]
 
@@ -131,7 +135,7 @@ THEMES = {
 
 TRANSACTION_SUFFIXES = {".csv", ".parquet", ".duckdb", ".db", ".sqlite"}
 PROJECT_SUFFIXES = {".json"}
-LOGO_PATH = Path("assets/altis_logo.jpeg")
+LOGO_PATH = Path("assets/altis_logo.png")
 DEFAULT_TXN_PATH = Path("data/transactions.csv")
 
 COMPANY_LOCATIONS = {
@@ -226,7 +230,7 @@ def logo_html(size: str = "sidebar") -> str:
     if LOGO_PATH.exists():
         max_height = "54px" if size == "sidebar" else "64px"
         return (
-            f'<img src="{data_uri(LOGO_PATH)}" alt="Altis Groep" '
+            f'<img src="{data_uri(LOGO_PATH)}" alt="Altis Groep" class="altis-logo" '
             f'style="max-height:{max_height};max-width:210px;object-fit:contain;" />'
         )
     return '<div class="wordmark">ALTIS<br/><span>GROEP</span></div>'
@@ -572,6 +576,16 @@ def inject_styles(theme_mode: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    # The logo is navy-on-transparent. On a dark background that's low-contrast,
+    # so in dark mode we sit it on a soft white rounded chip (brand colours stay
+    # intact). Light mode needs nothing — transparent on white already looks clean.
+    if theme_mode == "Dark Mode":
+        st.markdown(
+            "<style>.altis-logo{background:#FFFFFF;border-radius:12px;"
+            "padding:8px 14px;box-shadow:0 2px 10px rgba(0,0,0,0.35);}</style>",
+            unsafe_allow_html=True,
+        )
 
 
 def html_card(label: str, value: str, note: str = "") -> None:
@@ -1111,7 +1125,7 @@ def render_cash_chart(forecast: Forecast) -> None:
         .mark_area(color=BRAND_GREEN, opacity=0.12)
         .encode(x="week_start:T", y="ending_cash:Q")
     )
-    st.altair_chart(themed_chart(area + line), width="stretch")
+    st.altair_chart(themed_chart(area + line), use_container_width=True)
 
 
 def render_driver_donut(forecast: Forecast) -> None:
@@ -1133,7 +1147,7 @@ def render_driver_donut(forecast: Forecast) -> None:
         )
         .properties(height=285)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_weekly_driver_bars(forecast: Forecast) -> None:
@@ -1156,7 +1170,7 @@ def render_weekly_driver_bars(forecast: Forecast) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_wip_bar(projects: List[Project]) -> None:
@@ -1186,7 +1200,7 @@ def render_wip_bar(projects: List[Project]) -> None:
         )
         .properties(height=300)
     )
-    st.altair_chart(themed_chart(chart), width="stretch")
+    st.altair_chart(themed_chart(chart), use_container_width=True)
 
 
 def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -> Optional[str]:
@@ -1230,14 +1244,14 @@ def render_project_map(projects: List[Project], weather_shift: Dict[str, int]) -
     try:
         event = st.pydeck_chart(
             deck,
-            width="stretch",
+            use_container_width=True,
             height=430,
             key="opco_project_map",
             on_select="rerun",
             selection_mode="single-object",
         )
     except TypeError:
-        st.pydeck_chart(deck, width="stretch")
+        st.pydeck_chart(deck, use_container_width=True)
 
     return selected_project_from_map(event)
 
@@ -1486,7 +1500,7 @@ def render_project_lead_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), width="stretch")
+        st.altair_chart(themed_chart(chart), use_container_width=True)
         st.dataframe(events, width="stretch", hide_index=True)
     else:
         alert_box("No forecast cash events for this project land inside the 13-week horizon.")
@@ -1548,7 +1562,7 @@ def render_board_tab(
             )
             .properties(height=300)
         )
-        st.altair_chart(themed_chart(chart), width="stretch")
+        st.altair_chart(themed_chart(chart), use_container_width=True)
         st.dataframe(mover_df, width="stretch", hide_index=True)
     else:
         alert_box("No scenario movement versus base.")
@@ -1641,8 +1655,8 @@ def main() -> None:
 
     render_hero(data_mode, selected_label, state)
 
-    cfo_tab, opco_tab, project_tab, board_tab = st.tabs(
-        ["CFO", "Opco MD", "Project Lead", "PE Board"]
+    cfo_tab, opco_tab, project_tab, board_tab, mapping_tab = st.tabs(
+        ["CFO", "Opco MD", "Project Lead", "PE Board", "GL Mapping"]
     )
 
     with cfo_tab:
@@ -1656,6 +1670,12 @@ def main() -> None:
 
     with board_tab:
         render_board_tab(forecast, base_forecast, projects, weather_shift)
+
+    with mapping_tab:
+        # Default to the instant keyless heuristic so the app loads fast (Streamlit
+        # runs every tab's code on each rerun). OpenAI is one click away in the
+        # panel's engine dropdown, and cached after the first call.
+        render_mapping_review(default_backend="heuristic")
 
 
 if __name__ == "__main__":
