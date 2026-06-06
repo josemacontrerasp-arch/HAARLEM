@@ -11,8 +11,10 @@ from engine import (
     ForecastConfig,
     Transaction,
     biggest_movers,
+    build_all_opcos,
     build_forecast,
     compute_vat_remittances,
+    covenant,
     make_stub,
     validate_transaction,
 )
@@ -113,6 +115,68 @@ def t_scenario_only_changes_weather():
           abs(sum(base.drivers()["materials"]) - sum(wet.drivers()["materials"])) < 0.01)
 
 
+def t_opcos_reconcile_to_portfolio():
+    txns, projects = make_stub()
+    views = build_all_opcos(txns, projects)
+    portfolio = views["PORTFOLIO"]
+    opco_views = [v for k, v in views.items() if k != "PORTFOLIO"]
+    pnet = portfolio.net_cash()
+    ok = True
+    for w in range(len(pnet)):
+        summed = sum(v.net_cash()[w] for v in opco_views)
+        ok = ok and abs(summed - pnet[w]) < 0.01
+    check("sum of per-opco net cash == consolidated (no two numbers disagree)", ok)
+
+
+def t_all_covenant_metrics_run():
+    txns, projects = make_stub()
+    ok = True
+    for metric in ("min_liquidity", "leverage", "dscr"):
+        cfg = ForecastConfig(covenant_metric=metric)
+        fc = build_forecast(txns, projects, cfg=cfg)
+        head = fc.covenant_headroom()
+        lights = fc.covenant_lights()
+        ok = ok and len(head) == len(fc.weeks) and len(lights) == len(fc.weeks)
+        ok = ok and all(l in ("green", "amber", "red") for l in lights)
+    check("all three covenant metrics compute headroom + lights", ok)
+
+
+def t_covenant_breach_detected():
+    # force a breach by setting an impossibly high liquidity floor
+    txns, projects = make_stub()
+    cfg = ForecastConfig(covenant_metric="min_liquidity", covenant_threshold=10_000_000)
+    fc = build_forecast(txns, projects, cfg=cfg)
+    breach = covenant.first_breach_week(fc.covenant_lights())
+    check("an unreachable threshold is flagged as a breach", breach == 0)
+
+
+def t_payment_lag_recovered():
+    from datetime import timedelta
+    from engine import estimate_payment_lag
+    base = date(2026, 1, 1)
+    # government invoices all paid 45 days later; sme 21 days later
+    pairs = {
+        "government": [(base, base + timedelta(days=45)) for _ in range(10)],
+        "sme": [(base, base + timedelta(days=21)) for _ in range(10)],
+    }
+    coeffs = estimate_payment_lag(pairs)
+    check("payment-lag estimator recovers planted lags (45/21d)",
+          coeffs["government"].value == 45 and coeffs["sme"].value == 21)
+
+
+def t_weather_coeffs_recovered():
+    from engine import WeatherObs, estimate_weather_coeffs, predict_days_lost
+    # construct data where days_lost = 0.02*rain + 0.5*frost exactly
+    obs = [WeatherObs(rain, frost, 0.02 * rain + 0.5 * frost)
+           for rain in (0, 10, 50, 120) for frost in (0, 1, 3)]
+    c = estimate_weather_coeffs(obs)
+    ok = (abs(c["rain"].value - 0.02) < 1e-6 and abs(c["frost"].value - 0.5) < 1e-6
+          and c["rain"].r2 > 0.99)
+    # 100mm rain + 4 frost days -> round(0.02*100 + 0.5*4) = round(4.0) = 4
+    ok = ok and predict_days_lost(100, 4, c) == 4
+    check("weather estimator recovers planted coefficients + predicts slip", ok)
+
+
 def main():
     for fn in [
         t_stub_is_schema_clean,
@@ -123,6 +187,11 @@ def main():
         t_unmapped_does_not_crash,
         t_vat_remittance_computed_when_absent,
         t_scenario_only_changes_weather,
+        t_opcos_reconcile_to_portfolio,
+        t_all_covenant_metrics_run,
+        t_covenant_breach_detected,
+        t_payment_lag_recovered,
+        t_weather_coeffs_recovered,
     ]:
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")

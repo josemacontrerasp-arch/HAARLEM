@@ -33,6 +33,7 @@ class Forecast:
     opening_balance: float
     cfg: ForecastConfig
     contributions: List[TracedValue] = field(default_factory=list)
+    opco: str = "PORTFOLIO"                             # scope of this forecast
 
     # ---- aggregations (all derived from `contributions`) ----
     def drivers(self) -> Dict[str, List[float]]:
@@ -73,6 +74,7 @@ class Forecast:
         """One serialisable object Lane C reads (even across a process / JS boundary).
         Same object -> no two numbers disagree."""
         return {
+            "opco": self.opco,
             "scenario": self.scenario,
             "weeks": [w.isoformat() for w in self.weeks],
             "opening_balance": self.opening_balance,
@@ -103,18 +105,26 @@ def build_forecast(
     scenario: str = "base",
     cfg: Optional[ForecastConfig] = None,
     weather_shift: Optional[WeatherShift] = None,
+    opco: Optional[str] = None,
 ) -> Forecast:
+    """Build a 13-week forecast. Pass `opco` to scope to one operating company
+    (for per-opco views); omit it for the consolidated portfolio."""
     cfg = cfg or ForecastConfig()
     weather_shift = weather_shift or {}
     weeks = [cfg.anchor_monday + timedelta(weeks=w) for w in range(cfg.horizon_weeks)]
-    fc = Forecast(scenario=scenario, weeks=weeks,
-                  opening_balance=cfg.opening_balance, cfg=cfg)
+
+    all_opcos = sorted({t.opco for t in transactions if t.opco})
+    rows = [t for t in transactions if opco is None or t.opco == opco]
+    opening = cfg.opening_for(opco, all_opcos)
+    fc = Forecast(scenario=scenario, weeks=weeks, opening_balance=opening, cfg=cfg)
+    fc.opco = opco or "PORTFOLIO"
 
     # Compute quarterly BTW remittance from the vat column unless Lane A already
-    # supplied explicit vat_remittance rows.
-    rows = list(transactions)
-    if cfg.compute_vat and not any(t.driver_type == "vat_remittance" for t in rows):
-        rows = rows + compute_vat_remittances(rows)
+    # supplied explicit vat_remittance rows. Decide from the FULL dataset (not the
+    # per-opco slice) so consolidated and per-opco forecasts stay reconciled.
+    has_explicit_vat = any(t.driver_type == "vat_remittance" for t in transactions)
+    if cfg.compute_vat and not has_explicit_vat:
+        rows = rows + compute_vat_remittances(rows, opco_label=opco or "PORTFOLIO")
 
     weather_exposed = {p.project_id for p in projects if p.weather_exposure > 0}
 
@@ -175,6 +185,29 @@ def build_forecast(
         ))
 
     return fc
+
+
+def build_all_opcos(
+    transactions: List[Transaction],
+    projects: List[Project],
+    scenario: str = "base",
+    cfg: Optional[ForecastConfig] = None,
+    weather_shift: Optional[WeatherShift] = None,
+) -> Dict[str, Forecast]:
+    """Consolidated + one forecast per opco, all from the same engine.
+
+    Returns {"PORTFOLIO": consolidated, "<opco>": per-opco, ...}. This is what the
+    role views read: Board/CFO use PORTFOLIO, Opco MD uses its own opco — and
+    because every view is this same engine, no two numbers disagree.
+    """
+    cfg = cfg or ForecastConfig()
+    opcos = sorted({t.opco for t in transactions if t.opco})
+    out: Dict[str, Forecast] = {
+        "PORTFOLIO": build_forecast(transactions, projects, scenario, cfg, weather_shift),
+    }
+    for o in opcos:
+        out[o] = build_forecast(transactions, projects, scenario, cfg, weather_shift, opco=o)
+    return out
 
 
 @dataclass

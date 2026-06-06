@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict
+from typing import Dict, Optional
 
 
 @dataclass
@@ -17,6 +17,9 @@ class ForecastConfig:
     # Opening bank position (sum of actuals already settled before the anchor).
     # Lane A's real `actual` rows can replace this; stubbed for now.
     opening_balance: float = 250_000.0
+    # Per-opco opening balances (for per-opco views). Falls back to an even split
+    # of opening_balance across opcos seen in the data when empty.
+    opening_balance_by_opco: Dict[str, float] = field(default_factory=dict)
 
     # If Lane A doesn't emit explicit vat_remittance rows, compute quarterly BTW
     # from the vat_amount column (engine/vat.py).
@@ -38,13 +41,27 @@ class ForecastConfig:
         "Bouwbedrijf": "enterprise",
     })
 
-    # Covenant rule. PRD section 7: implement EXACTLY as the covenant doc says.
-    # We don't have that doc yet, so this is a clearly-marked placeholder behind
-    # config -> swap the real metric + threshold in one place when it arrives.
-    covenant_threshold: float = 100_000.0   # min headroom metric (EUR) before breach
-    covenant_amber_buffer: float = 50_000.0  # within this of threshold -> amber
+    # --- Covenant -----------------------------------------------------------
+    # PRD section 7: implement EXACTLY as the covenant doc says. We don't have it
+    # yet, so all THREE common forms are implemented (engine/covenant.py) and
+    # selected here. When the doc lands, set covenant_metric + the right numbers
+    # and nothing else changes.
+    covenant_metric: str = "min_liquidity"   # min_liquidity | leverage | dscr
 
-    def segment_for(self, counterparty: str | None) -> str:
+    # min_liquidity: cash must stay >= threshold (EUR)
+    covenant_threshold: float = 100_000.0
+    covenant_amber_buffer: float = 50_000.0  # within this of breach -> amber (metric units)
+
+    # leverage: Net Debt / EBITDA must stay <= max_leverage (turns)
+    gross_debt: float = 4_000_000.0
+    ttm_ebitda: float = 1_500_000.0          # trailing-12m; can come from datasets/ P&L
+    max_leverage: float = 3.5
+
+    # dscr: (cash + EBITDA) / debt_service must stay >= min_dscr (ratio)
+    annual_debt_service: float = 600_000.0
+    min_dscr: float = 1.25
+
+    def segment_for(self, counterparty: Optional[str]) -> str:
         if not counterparty:
             return "default"
         for key, seg in self.counterparty_segment.items():
@@ -54,3 +71,12 @@ class ForecastConfig:
 
     def lag_for(self, segment: str) -> int:
         return self.payment_lag_days.get(segment, self.payment_lag_days["default"])
+
+    def opening_for(self, opco: Optional[str], all_opcos: Optional[list] = None) -> float:
+        if opco is None:
+            return self.opening_balance
+        if opco in self.opening_balance_by_opco:
+            return self.opening_balance_by_opco[opco]
+        if all_opcos:
+            return self.opening_balance / max(1, len(all_opcos))
+        return self.opening_balance

@@ -34,11 +34,13 @@ def _remittance_due_date(year: int, quarter: int) -> date:
     return date(due_year, due_month, last_day)
 
 
-def compute_vat_remittances(transactions: List[Transaction]) -> List[Transaction]:
+def compute_vat_remittances(transactions: List[Transaction],
+                            opco_label: str = "PORTFOLIO") -> List[Transaction]:
     """Net VAT payable per quarter -> a synthetic vat_remittance outflow row.
 
     net payable = sum(vat_amount) over the quarter (sales VAT is +, purchase VAT
     is -). If positive the portfolio owes it -> outflow (negative cash).
+    `opco_label` tags the synthetic row so per-opco forecasts attribute VAT correctly.
     """
     by_q: Dict[Tuple[int, int], List[Transaction]] = {}
     for t in transactions:
@@ -59,7 +61,7 @@ def compute_vat_remittances(transactions: List[Transaction]) -> List[Transaction
             source_system="exact",   # computed; lineage points at contributing rows
             source_file="(computed by engine)",
             source_row=0,
-            opco="PORTFOLIO",
+            opco=opco_label,
             date=due,
             gl_account_native="1500",
             gl_account_unified="1500",
