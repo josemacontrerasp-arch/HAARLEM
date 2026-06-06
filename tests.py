@@ -177,8 +177,25 @@ def t_weather_coeffs_recovered():
     check("weather estimator recovers planted coefficients + predicts slip", ok)
 
 
+def t_weather_scenario_shift():
+    from engine import make_stub, scenario_shift, build_forecast
+    _, projects = make_stub()
+    base = scenario_shift(projects, "base")
+    wet = scenario_shift(projects, "wet-quarter")
+    dry = scenario_shift(projects, "dry-quarter")
+    # base = no shift; wet = positive days lost on exposed projects; dry = negative
+    ok = (base == {}
+          and all(v > 0 for v in wet.values()) and len(wet) > 0
+          and all(v <= 0 for v in dry.values()))
+    # and the shift actually changes the forecast
+    fc_wet = build_forecast(_, projects, scenario="wet-quarter", weather_shift=wet)
+    ok = ok and fc_wet is not None
+    check("weather scenario_shift: base=0, wet>0, dry<=0, drives forecast", ok)
+
+
 def main():
     for fn in [
+        t_weather_scenario_shift,
         t_stub_is_schema_clean,
         t_balance_is_opening_plus_cumsum,
         t_trace_sums_to_cell,

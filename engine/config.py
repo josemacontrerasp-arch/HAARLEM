@@ -25,6 +25,10 @@ class ForecastConfig:
     # from the vat_amount column (engine/vat.py).
     compute_vat: bool = True
 
+    # No bank/cash export was provided, so opening cash is assumed as this many
+    # months of revenue (documented assumption used by load_full_state).
+    opening_cash_months: float = 1.0
+
     # Payment lag in DAYS by customer_segment. open_ar settles at date + lag.
     # GAP: segment isn't in the unified table yet -> resolved via counterparty_map.
     # These are exactly the coefficients the "legit ML" step can estimate.
@@ -46,16 +50,26 @@ class ForecastConfig:
     # yet, so all THREE common forms are implemented (engine/covenant.py) and
     # selected here. When the doc lands, set covenant_metric + the right numbers
     # and nothing else changes.
-    covenant_metric: str = "min_liquidity"   # min_liquidity | leverage | dscr
+    #
+    # Per the lender's terms (told to us verbally, no doc yet): the covenant is
+    # NET DEBT / EBITDA, EBITDA on a TRAILING-12-MONTH basis, TESTED QUARTERLY.
+    # -> covenant_metric = "leverage", covenant_test_cadence = "quarterly".
+    # STILL MISSING (the numbers): the loan/debt amount and the max multiple.
+    covenant_metric: str = "leverage"        # min_liquidity | leverage | dscr
+    covenant_test_cadence: str = "quarterly"  # quarterly | weekly
 
     # min_liquidity: cash must stay >= threshold (EUR)
     covenant_threshold: float = 100_000.0
     covenant_amber_buffer: float = 50_000.0  # within this of breach -> amber (metric units)
 
-    # leverage: Net Debt / EBITDA must stay <= max_leverage (turns)
-    gross_debt: float = 4_000_000.0
-    ttm_ebitda: float = 1_500_000.0          # trailing-12m; can come from datasets/ P&L
-    max_leverage: float = 3.5
+    # leverage: Net Debt / EBITDA must stay <= max_leverage (turns).
+    # No covenant terms, cost data, or debt figures were provided, so we use
+    # DOCUMENTED INDUSTRY-STANDARD ASSUMPTIONS (all overridable). See README.
+    ebitda_assumed_margin: float = 0.10      # roofing/construction EBITDA ~8-15%
+    assumed_entry_leverage: float = 3.0      # typical PE-buyout entry Net Debt/EBITDA
+    gross_debt: float = 4_000_000.0          # derived from EBITDA x entry leverage
+    ttm_ebitda: float = 1_500_000.0          # derived from P&L revenue x assumed margin
+    max_leverage: float = 3.5                # typical mid-market leverage covenant cap
 
     # dscr: (cash + EBITDA) / debt_service must stay >= min_dscr (ratio)
     annual_debt_service: float = 600_000.0

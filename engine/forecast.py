@@ -63,6 +63,16 @@ class Forecast:
     def covenant_lights(self) -> List[str]:
         return covenant_rule.lights(self.covenant_headroom(), self.cfg)
 
+    def liquidity_headroom(self) -> List[float]:
+        """Weekly cash buffer above the liquidity floor. This is the view the
+        weather cascade actually moves (cash timing) — the CFO's early warning.
+        The lender's leverage covenant (TTM, quarterly) barely reacts to 13-week
+        cash timing, so we surface both: liquidity weekly, leverage at the test."""
+        return [b - self.cfg.covenant_threshold for b in self.running_balance()]
+
+    def covenant_test_summary(self) -> List[dict]:
+        return covenant_rule.test_summary(self.weeks, self.covenant_headroom(), self.cfg)
+
     def trace(self, week: int, driver: Optional[str] = None) -> List[TracedValue]:
         """The drill-down path: every TracedValue behind a cell."""
         return [
@@ -81,8 +91,11 @@ class Forecast:
             "drivers": self.drivers(),
             "net_cash": self.net_cash(),
             "running_balance": self.running_balance(),
+            "covenant_metric": self.cfg.covenant_metric,
             "covenant_headroom": self.covenant_headroom(),
             "covenant_lights": self.covenant_lights(),
+            "covenant_test_summary": self.covenant_test_summary(),
+            "liquidity_headroom": self.liquidity_headroom(),
             "first_breach_week": covenant_rule.first_breach_week(self.covenant_lights()),
             "contributions": [asdict(c) for c in self.contributions],
         }

@@ -7,6 +7,10 @@ portfolio company*/
 *.duckdb
 *.sqlite
 
+# ---- licensed P&L data (real figures + Drive IDs) — never commit ----
+*Portfolio P&L*.json
+*P&L*.json
+
 # ---- generated engine output ----
 forecast_*.json
 

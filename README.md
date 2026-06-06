@@ -77,8 +77,25 @@ filter — drill-down is exact (a test asserts traces sum to the cell).
 
 ## Assumptions (documented for the judges)
 
-- No covenant terms were provided → default is a **minimum-liquidity** covenant
-  (consolidated cash ≥ threshold, tested weekly). Swappable in `config.py`.
+No covenant terms, cost data, or debt figures were provided. Rather than invent
+precise numbers, we use **explicit, industry-standard assumptions** (all in
+`config.py`, all overridable). `engine/ebitda.derive_covenant_inputs()` applies them.
+
+| Input | Assumption | Basis |
+|---|---|---|
+| Covenant form | Net Debt / EBITDA, TTM, tested quarterly | Stated verbally by the lender |
+| EBITDA | revenue × **10%** | Typical roofing/construction EBITDA margin (~8–15%). The one opco with cost data shows a 66% margin → costs are incomplete, so we don't use it |
+| Net debt | **3.0×** EBITDA | Typical PE-buyout entry leverage |
+| Covenant cap | **3.5×** | Typical mid-market leverage covenant |
+
+Result on real revenue: TTM EBITDA ≈ €3.6M, net debt ≈ €10.8M, leverage ≈ 3.0×
+vs a 3.5× cap (~0.5× headroom). Every figure carries the assumption that produced it.
+
+**Liquidity vs leverage:** a TTM/quarterly leverage covenant barely reacts to
+13-week cash timing, so the weather cascade is surfaced on the weekly **liquidity**
+buffer (`liquidity_headroom()`), while the **leverage** covenant is the quarterly
+board test (`covenant_test_summary()`).
+
 - Payment lags are placeholder coefficients until estimated from real paired
   invoice/payment data via `engine/learn.py`.
 

@@ -40,7 +40,7 @@ import pandas as pd
 
 from engine.schema import Transaction, validate_transaction
 
-OPCO = "OpcoNoord"
+OPCO = "Heeze"
 SOURCE_SYSTEM = "gilde"
 DATA_DIR = "data/portfolio company data"
 
