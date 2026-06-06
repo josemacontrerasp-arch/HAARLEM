@@ -737,7 +737,7 @@ def main() -> None:
 
     data_mode = st.sidebar.selectbox(
         "Data mode",
-        ["Demo stub data", "Real data"],
+        ["Real data", "Demo stub data"],
         key="data_mode",
     )
 
