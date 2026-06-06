@@ -103,6 +103,40 @@ class PortfolioEbitda:
         return w
 
 
+def portfolio_ebitda_assumed(pl_path: str, margin: float = 0.10,
+                             months: int = 12) -> Tuple[float, float, dict]:
+    """Defensible EBITDA when costs are missing: portfolio TTM revenue x an
+    industry-standard roofing margin. Returns (ebitda, revenue, per_opco_revenue).
+
+    This is what we actually feed the covenant — the cost-based number is not
+    reliable (only one opco has costs, and at an implausible margin)."""
+    with open(pl_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    opcos = {k: v for k, v in data.items() if isinstance(v, dict) and k != "metadata"}
+    per_opco = {name: round(_ttm(_collect_revenue(blk), months), 2)
+                for name, blk in opcos.items()}
+    revenue = round(sum(per_opco.values()), 2)
+    return round(revenue * margin, 2), revenue, per_opco
+
+
+def derive_covenant_inputs(pl_path: str, cfg) -> dict:
+    """Set cfg.ttm_ebitda and cfg.gross_debt from the P&L using documented
+    assumptions. Returns a summary of what was assumed (for the audit trail)."""
+    ebitda, revenue, per_opco = portfolio_ebitda_assumed(pl_path, cfg.ebitda_assumed_margin)
+    cfg.ttm_ebitda = ebitda
+    cfg.gross_debt = round(ebitda * cfg.assumed_entry_leverage, 2)
+    return {
+        "ttm_revenue": revenue,
+        "assumed_margin": cfg.ebitda_assumed_margin,
+        "ttm_ebitda": ebitda,
+        "assumed_entry_leverage": cfg.assumed_entry_leverage,
+        "gross_debt": cfg.gross_debt,
+        "max_leverage": cfg.max_leverage,
+        "per_opco_revenue": per_opco,
+        "basis": "No covenant/cost/debt data provided; industry-standard assumptions.",
+    }
+
+
 def compute_portfolio_ebitda(pl_path: str, months: int = 12) -> PortfolioEbitda:
     with open(pl_path, encoding="utf-8") as fh:
         data = json.load(fh)

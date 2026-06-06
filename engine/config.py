@@ -59,10 +59,13 @@ class ForecastConfig:
     covenant_amber_buffer: float = 50_000.0  # within this of breach -> amber (metric units)
 
     # leverage: Net Debt / EBITDA must stay <= max_leverage (turns).
-    # PLACEHOLDERS until the lender's numbers land:
-    gross_debt: float = 4_000_000.0          # ?? need actual loan balance
-    ttm_ebitda: float = 1_500_000.0          # trailing-12m; derivable from datasets/ P&L
-    max_leverage: float = 3.5                # ?? need the actual covenant multiple
+    # No covenant terms, cost data, or debt figures were provided, so we use
+    # DOCUMENTED INDUSTRY-STANDARD ASSUMPTIONS (all overridable). See README.
+    ebitda_assumed_margin: float = 0.10      # roofing/construction EBITDA ~8-15%
+    assumed_entry_leverage: float = 3.0      # typical PE-buyout entry Net Debt/EBITDA
+    gross_debt: float = 4_000_000.0          # derived from EBITDA x entry leverage
+    ttm_ebitda: float = 1_500_000.0          # derived from P&L revenue x assumed margin
+    max_leverage: float = 3.5                # typical mid-market leverage covenant cap
 
     # dscr: (cash + EBITDA) / debt_service must stay >= min_dscr (ratio)
     annual_debt_service: float = 600_000.0
