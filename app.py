@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import inspect
+import os
 from dataclasses import dataclass, field
 from datetime import timedelta
 from html import escape
@@ -1568,12 +1569,56 @@ def render_board_tab(
         alert_box("No scenario movement versus base.")
 
 
+def _secret(name: str) -> Optional[str]:
+    """Read a config value from the environment first, then st.secrets (so it works
+    locally via .env / shell AND on Streamlit Cloud via the Secrets box)."""
+    val = os.environ.get(name)
+    if val:
+        return val
+    try:
+        if name in st.secrets:
+            return str(st.secrets[name])
+    except Exception:
+        pass
+    return None
+
+
+def _bridge_secrets_to_env() -> None:
+    """Mirror keys from st.secrets into os.environ so llm_gl_mapping (which reads
+    os.environ) picks them up on Streamlit Cloud."""
+    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+        val = _secret(key)
+        if val and not os.environ.get(key):
+            os.environ[key] = val
+
+
+def password_gate() -> None:
+    """If APP_PASSWORD is configured (secret or env), require it before showing the
+    app. With no password set the app is open — so local runs and the public repo
+    are unaffected; only the private Streamlit deploy (where APP_PASSWORD is set)
+    is gated."""
+    expected = _secret("APP_PASSWORD")
+    if not expected or st.session_state.get("_authenticated"):
+        return
+    st.title("Altis Groep")
+    st.caption("Protected demo — contains licensed data. Enter the access password to continue.")
+    pw = st.text_input("Password", type="password")
+    if pw:
+        if pw == expected:
+            st.session_state["_authenticated"] = True
+            st.rerun()
+        st.error("Incorrect password.")
+    st.stop()
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Altis Groep - Weather-Aware Forecast",
         page_icon=None,
         layout="wide",
     )
+    _bridge_secrets_to_env()
+    password_gate()
     theme_mode = st.sidebar.selectbox(
         "Theme",
         ["Light Mode", "Dark Mode"],

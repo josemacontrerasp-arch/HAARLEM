@@ -1,13 +1,12 @@
-# Engine core (schema, forecast, covenant, vat, config, stub) is pure stdlib.
-numpy            # engine/learn.py - the two calibrated coefficients
-duckdb           # engine/load.py - read reconciled parquet/duckdb tables (CSV needs nothing)
-streamlit>=1.36  # app.py - the role-based dashboard
+# --- Runtime (what `streamlit run app.py` needs; installed by Streamlit Cloud) ---
+streamlit>=1.49      # dashboard (uses st.pydeck_chart on_select, dataframe width)
+numpy                # engine/learn.py - the two calibrated coefficients
+duckdb               # engine/load.py - read reconciled parquet/duckdb tables (CSV needs nothing)
+pandas               # app.py charts/tables + the ingest adapters
+altair               # app.py - cash/driver charts
+pydeck               # app.py - the opco project map
+openai               # llm_gl_mapping.py - LLM mapping backend (falls back to keyless heuristic if no key)
 
-# Only for inspecting raw .xlsx exports (ingestion input, not the engine):
-# openpyxl
-# pandas
-
-# Optional - LLM backend for llm_gl_mapping.py. Without either, it runs the
-# keyless deterministic heuristic. Provide the key via the environment.
-# openai           # preferred; set OPENAI_API_KEY
-# anthropic        # set ANTHROPIC_API_KEY
+# --- Optional ---
+# anthropic          # alternative LLM mapping backend (set ANTHROPIC_API_KEY)
+# openpyxl           # only needed to RE-RUN raw .xlsx ingestion (not at runtime)
