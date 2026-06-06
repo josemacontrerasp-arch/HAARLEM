@@ -5,7 +5,7 @@
 ---
 
 ## Lane A — Data
-- [ ] Fill in `data/lane_a_review_checklist.md` — sign off on all LLM mapping decisions before submission
+- [x] Fill in `data/lane_a_review_checklist.md` — signed off by Samuel Vohnout, 2026-06-06
 
 ---
 

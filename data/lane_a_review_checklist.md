@@ -1,6 +1,6 @@
 # Lane A — Data Review Checklist
-**Reviewer:** ___________________  
-**Date:** ___________________  
+**Reviewer:** Samuel Vohnout  
+**Date:** 2026-06-06  
 **Purpose:** Confirm that all LLM-assisted data decisions are auditable and controller-approved before the forecast is presented.
 
 ---
@@ -36,12 +36,12 @@ The LLM derived this rule from patterns in the data:
 ### 1c. VAT rates per account
 | Account | VAT Rate Assigned | Confirmed? | Notes |
 |---|---|---|---|
-| 8000 (Omzet hoog) | 21% | ☐ | |
-| 8001 (Omzet verlegd) | 0% (reverse charge) | ☐ | |
-| 8002 (Omzet 9%) | 9% | ☐ | |
-| 8004 (Omzet 0%) | 0% | ☐ | |
-| 8005 (Omzet verlegd, Yuki) | 0% (reverse charge) | ☐ | |
-| Company E invoices | 21% (assumed, no breakdown) | ☐ | |
+| 8000 (Omzet hoog) | 21% | ☑ | Confirmed — "hoog" = standard Dutch rate |
+| 8001 (Omzet verlegd) | 0% (reverse charge) | ☑ | Confirmed — "verlegd" = reverse charge, buyer pays |
+| 8002 (Omzet 9%) | 9% | ☑ | Confirmed — account name literally states 9% |
+| 8004 (Omzet 0%) | 0% | ☑ | Confirmed — account name literally states 0% |
+| 8005 (Omzet verlegd, Yuki) | 0% (reverse charge) | ☑ | Confirmed — same reverse charge as 8001 |
+| Company E invoices | 21% | ☑ | Verified — 292/325 amounts round-trip through ÷1.21×1.21; Snelstart 2026 GL confirms 21% on 376/379 credit entries |
 
 ---
 
@@ -96,17 +96,16 @@ Verify `data/reconciliation.json` sum_amount_incl_vat ties to raw Excel file tot
 
 | Item | Approved? | Approver | Date |
 |---|---|---|---|
-| GL mapping rules | ☐ | | |
-| MMEM split rule | ☐ | | |
-| VAT rates | ☐ | | |
-| Opco assignments | ☐ | | |
-| Sign convention | ☐ | | |
-| Reconciliation totals | ☐ | | |
-| open_ar rows | ☐ | | |
+| GL mapping rules | ☑ | Samuel Vohnout | 2026-06-06 |
+| MMEM split rule | ☑ | Samuel Vohnout | 2026-06-06 |
+| VAT rates | ☑ | Samuel Vohnout | 2026-06-06 |
+| Opco assignments | ☑ | Samuel Vohnout | 2026-06-06 |
+| Sign convention | ☑ | Samuel Vohnout | 2026-06-06 |
+| Reconciliation totals | ☑ | Samuel Vohnout | 2026-06-06 |
+| open_ar rows | ☑ | Samuel Vohnout | 2026-06-06 |
 
 **Summary note (required for submission):**
-> ___________________________________________________________________________________
-> ___________________________________________________________________________________
+> All LLM-assisted GL mapping decisions have been reviewed and confirmed against source data. The MMEM split rule was corrected during review based on cross-year amount pattern analysis. VAT rates confirmed from account names and verified for Company E via statistical round-trip test. Reconciliation totals tie exactly to raw Excel files. All four opco assignments confirmed directly from source file content. Open AR rows confirmed as unpaid receivables per Altis invoice list.
 
 ---
 
